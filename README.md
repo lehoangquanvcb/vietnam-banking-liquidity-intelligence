@@ -1,27 +1,33 @@
-# Vietnam Monetary & Banking Liquidity Intelligence V6
+# Vietnam Banking Liquidity Intelligence V6.1 — Streamlit Cloud Ready
 
-## Main V6 upgrade
-V6 adds a bank-by-bank transmission layer:
-System liquidity stress -> funding vulnerability -> funding cost shock -> stressed NIM -> GREEN/AMBER/RED watch flag.
+## Điểm khác V6
+- Không còn yêu cầu chạy `bank_data.py` và `bank_stress.py` bằng tay trước khi mở app.
+- `app.py` tự tải dữ liệu ngân hàng từ Vnstock Fundamental.
+- Có `st.cache_data` 12 giờ để giảm số lượt API.
+- Có nút **Cập nhật dữ liệu Vnstock** trên sidebar.
+- Tự tính stress score trong app.
+- Toàn bộ giao diện chính đã Việt hóa.
+- Không synthetic-fill BCTC ngân hàng.
 
-## Real-data-first workflow
-```bash
-pip install -r requirements.txt
-python update_macro.py
-python bank_data.py
-python bank_stress.py
-streamlit run app.py
+## Deploy Streamlit Cloud
+Repo tối thiểu:
+```text
+app.py
+requirements.txt
+README.md
+config/
+  banks.json
+  vnstock_bronze.json
+data/
 ```
 
-`bank_data.py` uses Vnstock Fundamental for quarterly bank balance sheets, income statements and financial ratios. It attempts to map actual bank metrics such as customer loans, deposits, interbank borrowing, CASA and NIM. If an item cannot be mapped, it stays blank.
+Main file path:
+```text
+app.py
+```
 
-## Bank universe
-VCB, BID, CTG, TCB, MBB, ACB, HDB, VPB, STB, VIB, SHB, TPB, LPB, OCB, MSB, SSB, EIB, NAB, KLB, BAB.
+## Python
+Khuyến nghị Python 3.12 cho production ổn định hơn.
 
-Edit `config/banks.json` to change the universe.
-
-## Production safeguards
-- No synthetic fill for bank financial statements.
-- Vulnerability output gated at >=50% metric coverage.
-- ACTUAL / CALC / ESTIMATE / ASSUMPTION lineage kept separate.
-- Stress coefficients are assumptions and are editable in Excel/Streamlit.
+## Sponsor
+Không hard-code token/API key. Cấu hình Vnstock Sponsor theo cơ chế chính thức của Vnstock/Streamlit Secrets nếu tài khoản của bạn yêu cầu.

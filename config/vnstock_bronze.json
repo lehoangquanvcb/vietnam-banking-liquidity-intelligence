@@ -1,0 +1,7 @@
+{
+  "sponsor_tier": "Bronze",
+  "advertised_requests_per_minute": 300,
+  "app_safety_requests_per_minute": 240,
+  "bank_cache_hours": 12,
+  "note": "Authentication is intentionally not hard-coded. Use official Vnstock Sponsor configuration on Streamlit."
+}
