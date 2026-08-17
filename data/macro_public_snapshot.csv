@@ -1,7 +1,7 @@
-﻿Period,Indicator,Value,Unit,Data Type,Source,URL
-26/06/2026,Tăng trưởng tín dụng YTD,7.41,%,ACTUAL,NSO,https://www.nso.gov.vn/bai-top/2026/07/bao-cao-tinh-hinh-kinh-te-xa-hoi-quy-ii-va-sau-thang-dau-nam-2026/
-26/06/2026,Tăng trưởng huy động YTD,5.02,%,ACTUAL,NSO,https://www.nso.gov.vn/bai-top/2026/07/bao-cao-tinh-hinh-kinh-te-xa-hoi-quy-ii-va-sau-thang-dau-nam-2026/
-06/2026,CPI YoY,4.69,%,ACTUAL,NSO,https://www.nso.gov.vn/bai-top/2026/07/bao-cao-tinh-hinh-kinh-te-xa-hoi-quy-ii-va-sau-thang-dau-nam-2026/
-6T/2026,Lạm phát cơ bản,4.12,%,ACTUAL,NSO,https://www.nso.gov.vn/bai-top/2026/07/bao-cao-tinh-hinh-kinh-te-xa-hoi-quy-ii-va-sau-thang-dau-nam-2026/
-Q2/2026,GDP YoY,8.39,%,ACTUAL,NSO,https://www.nso.gov.vn/bai-top/2026/07/bao-cao-tinh-hinh-kinh-te-xa-hoi-quy-ii-va-sau-thang-dau-nam-2026/
-6T/2026,Cán cân thương mại,-16.65,tỷ USD,ACTUAL,NSO,https://www.nso.gov.vn/bai-top/2026/07/bao-cao-tinh-hinh-kinh-te-xa-hoi-quy-ii-va-sau-thang-dau-nam-2026/
+﻿Period,Indicator,Value,Unit,Data Type,Source
+26/06/2026,Tăng trưởng tín dụng YTD,7.41,%,ACTUAL,NSO
+26/06/2026,Tăng trưởng huy động YTD,5.02,%,ACTUAL,NSO
+06/2026,CPI YoY,4.69,%,ACTUAL,NSO
+6T/2026,Lạm phát cơ bản,4.12,%,ACTUAL,NSO
+Q2/2026,GDP YoY,8.39,%,ACTUAL,NSO
+6T/2026,Cán cân thương mại,-16.65,tỷ USD,ACTUAL,NSO

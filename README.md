@@ -1,47 +1,19 @@
-# Vietnam Banking Liquidity Intelligence V6.4 — Sponsor-Aware
+# V6.5 Stable Sponsor
 
-## V6.4 sửa gì?
-V6.4 không còn ghi "Bronze" nhưng thực tế chạy Free một cách mập mờ.
+## Fixes
+- Sponsor installer is NEVER auto-run at startup.
+- Explicit install/connect button only.
+- API probe: maximum 3 banks / 12 seconds.
+- Circuit breaker opens unless at least 2/3 probes return useful data.
+- Full batch max wait 20 seconds.
+- If Bronze and Free both fail, no more API calls during normal Streamlit reruns.
+- Bronze counts only rows whose `Source Mode == BRONZE`.
+- Arrow-safe dataframe rendering avoids mixed-object `pyarrow.ArrowInvalid`.
+- Fallback remains clearly labelled ASSUMPTION.
 
-App hiển thị rõ 3 trạng thái:
-- **BRONZE CONNECTED**: `vnstock_data` Sponsor đang hoạt động.
-- **FREE MODE**: dùng `vnstock` Community.
-- **FALLBACK**: dùng snapshot ACTUAL + assumptions được gắn nhãn.
+## Streamlit Secret
+Manage app -> Settings -> Secrets:
+VNSTOCK_API_KEY = "YOUR_KEY"
 
-## Cách nhập Vnstock API Key
-
-### Cách khuyến nghị — Streamlit Secrets
-Vào:
-`Manage app → Settings → Secrets`
-
-Thêm:
-```toml
-VNSTOCK_API_KEY = "API_KEY_CUA_BAN"
-```
-
-Không commit `secrets.toml`.
-
-### Cách thử nhanh — giao diện app
-Nếu chưa có Secret, sidebar hiện ô password `Vnstock API Key`.
-Key chỉ được lưu trong `st.session_state` của phiên hiện tại.
-
-## Sponsor runtime installer
-Nếu `vnstock_data` chưa có, app dùng CLI installer chính thức:
-`https://vnstocks.com/files/vnstock-cli-installer.run`
-
-Installer chạy non-interactive và nhận key qua biến môi trường `VNSTOCK_API_KEY`, không đưa key vào command line.
-
-Sponsor được cài vào:
-`/tmp/vnstock_sponsor_venv`
-
-App thêm site-packages của venv này vào `sys.path`.
-
-## Deploy
-Khuyến nghị Python 3.12.
-Main file: `app.py`.
-
-## Data priority
-1. Vnstock Bronze Sponsor (`vnstock_data`)
-2. Vnstock Community (`vnstock`)
-3. Public ACTUAL macro snapshot
-4. Explicit `ASSUMPTION` fallback
+## Deployment
+Use app.py. Python 3.12 recommended.
