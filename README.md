@@ -23,3 +23,10 @@ git add -A
 git commit -m "Upgrade sponsor connection"
 git push origin main
 ```
+
+## Hotfix dependency installer
+The official Vnstock CLI imports `requests`. This package now protects against a missing Streamlit dependency in two layers:
+1. `requirements.txt` explicitly includes `requests` and `packaging`.
+2. Before launching the CLI installer, `app.py` checks those modules in the current `sys.executable`; if absent, it installs them into that exact runtime with `python -m pip`.
+
+This prevents the repeated `ModuleNotFoundError: No module named 'requests'` seen on Streamlit Cloud.

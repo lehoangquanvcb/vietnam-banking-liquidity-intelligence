@@ -50,12 +50,45 @@ def sponsor_available():
     except Exception as e:
         return False,str(e)
 
+def ensure_installer_dependencies(timeout=90):
+    """Ensure dependencies used by the official Vnstock CLI exist in THIS Streamlit Python runtime."""
+    required=[
+        ("requests","requests>=2.31,<3"),
+        ("packaging","packaging>=23,<27"),
+    ]
+    installed=[]
+    for module_name,pip_spec in required:
+        try:
+            importlib.import_module(module_name)
+            continue
+        except Exception:
+            pass
+        try:
+            proc=subprocess.run(
+                [sys.executable,"-m","pip","install","--disable-pip-version-check",pip_spec],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                timeout=timeout,
+            )
+            importlib.invalidate_caches()
+            importlib.import_module(module_name)
+            installed.append(pip_spec)
+        except Exception as e:
+            return False,f"Không thể cài dependency {pip_spec} vào runtime {sys.executable}: {e}"
+    return True,("Đã bổ sung: "+", ".join(installed)) if installed else "Dependencies đã sẵn sàng."
+
 def install_sponsor(key,timeout=90):
     if not key or len(key.strip())<8:
         return False,"API Key chưa hợp lệ."
     configure_key(key)
     ok,detail=sponsor_available()
     if ok:return True,f"vnstock_data đã sẵn sàng ({detail})."
+
+    dep_ok,dep_msg=ensure_installer_dependencies(timeout=90)
+    if not dep_ok:
+        return False,dep_msg
+
     try:
         urllib.request.urlretrieve(INSTALLER_URL,INSTALLER_PATH)
         INSTALLER_PATH.chmod(0o755)
@@ -251,13 +284,19 @@ with st.sidebar:
         if st.button("🔌 Kết nối Vnstock Bronze",use_container_width=True):
             st.session_state.connection_attempted=True
             with st.status("Đang kết nối Vnstock Bronze...",expanded=True) as status_box:
-                st.write("1/3 Kiểm tra API Key...")
+                st.write("1/4 Kiểm tra API Key...")
                 configure_key(api_key)
-                st.write("2/3 Tải/chạy Vnstock CLI Installer...")
-                ok,msg=install_sponsor(api_key,90)
+                st.write("2/4 Kiểm tra/cài dependencies của CLI (`requests`, `packaging`)...")
+                dep_ok,dep_msg=ensure_installer_dependencies(90)
+                st.write(dep_msg)
+                if dep_ok:
+                    st.write("3/4 Tải/chạy Vnstock CLI Installer...")
+                    ok,msg=install_sponsor(api_key,90)
+                else:
+                    ok,msg=False,dep_msg
                 st.session_state.connection_log=msg
                 if ok:
-                    st.write("3/3 Kiểm tra vnstock_data...")
+                    st.write("4/4 Kiểm tra vnstock_data...")
                     status_box.update(label="Kết nối Bronze thành công",state="complete",expanded=False)
                     fetch_bronze_data.clear()
                     st.rerun()
