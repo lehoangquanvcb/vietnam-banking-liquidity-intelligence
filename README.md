@@ -1,60 +1,47 @@
-# Vietnam Banking Liquidity Intelligence V6.2 — Cloud Stable
+# Vietnam Banking Liquidity Intelligence V6.4 — Sponsor-Aware
 
-## Lỗi V6.1 đã sửa
-Streamlit Cloud **không còn import `vnstock_data`**. Vì vậy app không bị `ModuleNotFoundError: No module named 'vnstock_data'`.
+## V6.4 sửa gì?
+V6.4 không còn ghi "Bronze" nhưng thực tế chạy Free một cách mập mờ.
 
-Kiến trúc:
-```text
-Máy local + Vnstock Bronze Sponsor
-          ↓
-bank_data_local.py / update_macro_local.py
-          ↓
-data/*.csv
-          ↓
-GitHub
-          ↓
-Streamlit Community Cloud
-          ↓
-app.py đọc CSV + chạy dashboard/stress
+App hiển thị rõ 3 trạng thái:
+- **BRONZE CONNECTED**: `vnstock_data` Sponsor đang hoạt động.
+- **FREE MODE**: dùng `vnstock` Community.
+- **FALLBACK**: dùng snapshot ACTUAL + assumptions được gắn nhãn.
+
+## Cách nhập Vnstock API Key
+
+### Cách khuyến nghị — Streamlit Secrets
+Vào:
+`Manage app → Settings → Secrets`
+
+Thêm:
+```toml
+VNSTOCK_API_KEY = "API_KEY_CUA_BAN"
 ```
 
-## Deploy Streamlit Cloud
-`requirements.txt` chỉ gồm thư viện tiêu chuẩn cloud. Main file:
-```text
-app.py
-```
+Không commit `secrets.toml`.
 
-Khuyến nghị Python **3.12**.
+### Cách thử nhanh — giao diện app
+Nếu chưa có Secret, sidebar hiện ô password `Vnstock API Key`.
+Key chỉ được lưu trong `st.session_state` của phiên hiện tại.
 
-## Cài trên máy local lần đầu
-Double-click:
-```text
-SETUP_LOCAL.bat
-```
-Hoặc:
-```bash
-pip install -r requirements_local.txt
-```
+## Sponsor runtime installer
+Nếu `vnstock_data` chưa có, app dùng CLI installer chính thức:
+`https://vnstocks.com/files/vnstock-cli-installer.run`
 
-Sau đó bảo đảm Vnstock Sponsor đã được kích hoạt/cấu hình trên máy theo cơ chế chính thức của Vnstock.
+Installer chạy non-interactive và nhận key qua biến môi trường `VNSTOCK_API_KEY`, không đưa key vào command line.
 
-## Refresh dữ liệu
-Double-click:
-```text
-REFRESH_AND_PUSH.bat
-```
+Sponsor được cài vào:
+`/tmp/vnstock_sponsor_venv`
 
-Script sẽ:
-1. tải BCTC ngân hàng từ Vnstock;
-2. tải dữ liệu vĩ mô;
-3. dựng `daily_features.csv`;
-4. `git add data`;
-5. `git commit`;
-6. `git push`.
+App thêm site-packages của venv này vào `sys.path`.
 
-Streamlit Cloud sẽ tự redeploy khi GitHub có commit mới.
+## Deploy
+Khuyến nghị Python 3.12.
+Main file: `app.py`.
 
-## Quan trọng
-Không thêm `data/*.csv` vào `.gitignore`, vì Cloud cần đọc các CSV này.
-
-Không commit token/API key vào GitHub.
+## Data priority
+1. Vnstock Bronze Sponsor (`vnstock_data`)
+2. Vnstock Community (`vnstock`)
+3. Public ACTUAL macro snapshot
+4. Explicit `ASSUMPTION` fallback
