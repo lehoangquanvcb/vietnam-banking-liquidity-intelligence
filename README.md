@@ -1,20 +1,25 @@
-# V6.5.1 Sponsor Hotfix
+# Vietnam Banking Liquidity Intelligence — Sponsor Connect Edition
 
-## Fix the current deployment error
-V6.5.1 removes the cross-file `from sponsor_bootstrap import configure_key` dependency.
-Sponsor bootstrap code is embedded directly in `app.py`, so stale `sponsor_bootstrap.py` cannot break deployment.
+## Thay đổi chính
+- Bỏ số phiên bản khỏi tiêu đề giao diện.
+- Nếu Streamlit Secrets đã có API Key nhưng `vnstock_data` chưa sẵn sàng, nút **Kết nối Vnstock Bronze** luôn xuất hiện.
+- Sponsor installer chỉ chạy sau khi người dùng bấm nút.
+- Hiển thị tiến trình 3 bước và log lỗi cụ thể.
+- Bronze chỉ full-load 20 ngân hàng sau khi probe 3 mã đạt yêu cầu.
+- Free/Guest chỉ probe 3 mã để không chạm quota.
+- Circuit breaker + cache 6 giờ.
+- Không còn file `sponsor_bootstrap.py`; toàn bộ kết nối nằm trong `app.py`.
 
-## Guest rate-limit safety
-The Streamlit log showed Guest quota 20/20 requests/min.
-Therefore FREE/GUEST mode now probes only the first 3 banks and NEVER calls the full 20-bank universe.
-Only BRONZE mode may load the full 20-bank universe.
-
-## Circuits
-- Bronze probe: 3 banks / 12 seconds. Need 2 useful successes before full batch.
-- Free probe: max 3 banks / 12 seconds, probe only.
-- Failures open session circuit to prevent repeated API calls on every Streamlit rerun.
-- Use the sidebar refresh button to explicitly retry.
-
-## Secret
-Streamlit Settings -> Secrets:
+## Streamlit Secret
+Manage app → Settings → Secrets:
+```toml
 VNSTOCK_API_KEY = "YOUR_KEY"
+```
+
+## Git
+Khi thay package cũ, giữ thư mục `.git`, xóa code cũ, copy toàn bộ package mới rồi:
+```bash
+git add -A
+git commit -m "Upgrade sponsor connection"
+git push origin main
+```
