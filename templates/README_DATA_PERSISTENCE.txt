@@ -1,20 +1,17 @@
-IMPORTANT — THIS IS A CODE-ONLY UPGRADE PACKAGE.
+PRODUCTION R2 IS CODE-ONLY.
 
-Do NOT delete your repository's data/ folder.
+DO NOT DELETE OR REPLACE YOUR EXISTING repository/data/ FOLDER.
 
-Copy/replace:
-- app.py
-- scripts/
-- config/
-- .github/
-- requirements.txt
-- requirements_local.txt
-- *.bat
-- Vietnam_Banking_Liquidity_Master.xlsx
+Copy/replace only:
+app.py
+scripts/
+config/
+.github/
+requirements.txt
+requirements_local.txt
+REFRESH_BRONZE*.bat
+Vietnam_Banking_Liquidity_Master.xlsx
+README.md
+templates/
 
-KEEP:
-- data/ and all Bronze ACTUAL CSV/model outputs.
-
-If Vnstock true interbank remains unavailable:
-copy templates/interbank_manual_template.csv to data/interbank_manual.csv
-and fill ONLY actual published overnight observations with source URL.
+Then run REFRESH_BRONZE_BUILD_MODELS_AND_PUSH.bat.

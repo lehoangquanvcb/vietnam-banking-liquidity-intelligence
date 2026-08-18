@@ -3,8 +3,8 @@ setlocal EnableExtensions
 cd /d "%~dp0"
 
 echo ============================================================
-echo BRONZE ACTUAL -> MODELS -> GITHUB -> STREAMLIT
-echo DATA/ IS PERSISTENT AND IS NEVER INITIALIZED/OVERWRITTEN HERE
+echo BRONZE ACTUAL -> MODEL GOVERNANCE -> GITHUB -> STREAMLIT
+echo DATA/ IS PERSISTENT. CODE UPGRADE NEVER INITIALIZES DATA/.
 echo ============================================================
 
 set "PYBRONZE="
@@ -17,18 +17,21 @@ echo Python Bronze: %PYBRONZE%
 "%PYBRONZE%" -c "from vnstock_data import Fundamental, Macro; print('BRONZE READY')"
 if errorlevel 1 goto :error
 
-"%PYBRONZE%" -c "import pandas,numpy,statsmodels,sklearn; print('MODEL DEPS READY')"
+"%PYBRONZE%" -c "import pandas,numpy,statsmodels,sklearn,openpyxl; print('MODEL DEPS READY')"
 if errorlevel 1 (
   "%PYBRONZE%" -m ensurepip --upgrade >nul 2>nul
   "%PYBRONZE%" -m pip install -r requirements_local.txt
   if errorlevel 1 goto :error
 )
 
+echo [0/3] Optional: export ACTUAL interbank rows from Master...
+"%PYBRONZE%" scripts\export_interbank_from_master.py
+
 echo [1/3] Refresh Bronze ACTUAL...
 "%PYBRONZE%" scripts\refresh_bronze.py
 if errorlevel 1 goto :error
 
-echo [2/3] Build forecasts and bank stress...
+echo [2/3] Build governed forecasts and bank stress...
 "%PYBRONZE%" scripts\build_models.py
 if errorlevel 1 goto :error
 
@@ -36,7 +39,7 @@ echo [3/3] Commit persistent data + model outputs...
 git add data
 git diff --cached --quiet
 if %errorlevel%==0 goto :done
-git commit -m "Refresh Bronze actual data and liquidity models"
+git commit -m "Refresh Bronze actual data and governed liquidity models"
 if errorlevel 1 goto :error
 git push origin main
 if errorlevel 1 goto :error

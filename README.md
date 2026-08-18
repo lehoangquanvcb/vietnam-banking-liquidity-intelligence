@@ -1,55 +1,41 @@
-# Vietnam Banking Liquidity Intelligence — Production Plus
+# Vietnam Banking Liquidity Intelligence — Production R2
 
-## KIẾN TRÚC BẮT BUỘC GIỮ
-Persistent PC / self-hosted runner -> `vnstock_data` Bronze -> ACTUAL CSV -> model outputs -> GitHub -> Streamlit.
+## Upgrade safety
+This package intentionally contains **NO `data/` directory**.
 
-**Streamlit Cloud không cài và không gọi Vnstock Sponsor.**
+When upgrading, KEEP the repository's existing `data/` folder and replace only code/config/master files.
 
-## Quan trọng: package này KHÔNG có thư mục data/
-Mục đích là bảo vệ dữ liệu production. Khi nâng cấp:
-- GIỮ nguyên `data/` trong repo.
-- Chép đè `app.py`, `scripts/`, `config/`, `.github/`, `requirements*.txt`, các file `.bat`, Master.
-- Không xóa `data/`.
+## Proven Bronze architecture
+Persistent PC/self-hosted runner → `vnstock_data` Bronze → ACTUAL CSV → governed model outputs → GitHub → Streamlit Cloud.
 
-## Nâng cấp chính
+Streamlit never installs/calls Sponsor.
 
-### 1) Bank parser theo vnstock_data v3.2.8+
-- Gọi `balance_sheet(... format="long", com_type="Bank")`
-- Gọi `ratio(... format="long", com_type="Bank")`
-- Gọi `financial_health(scorecard="bank")`
-- Ưu tiên Semantic ID (`id`) trước tên hiển thị.
-- Lưu raw source tables vào `data/raw_bank/` để audit/debug.
-- Tính MetricCoverage cho 5 biến: LDR, CASA, InterbankDep, CreditDepositGap, NIM.
-- Chỉ dùng Bronze trong bank stress nếu coverage >=60%; thiếu thì fallback ticker-level có nhãn ASSUMPTION.
+## Fixes in R2
+- No Streamlit `DeltaGenerator` objects are printed: all UI branches use explicit `if/else`.
+- Bank stress always has a ticker-level fallback from `config/bank_fallback_assumptions.csv` when Bronze coverage <60%.
+- Stress Lab uses valid `BaseVulnerability` rows only.
+- ARIMA must beat naive benchmark on holdout RMSE. Otherwise production automatically publishes `NAIVE_RANDOM_WALK`, Confidence=LOW.
+- True interbank only: never substitute deposit/lending rate proxy.
+- Optional ACTUAL interbank input can be entered in the Master workbook. At least 10 valid rows with source URLs are required before `data/interbank_manual.csv` is overwritten.
+- Bank parser prioritizes current `scorecard="banking"` Fundamental calls and stores raw financial tables for audit.
 
-### 2) Interbank multi-source
-Nguồn true interbank:
-1. `data/interbank_bronze.csv` từ `Macro().currency().interbank_rate(...)`.
-2. `data/interbank_manual.csv` nếu người dùng nhập/import ACTUAL từ nguồn công khai.
+## Commands
+After copying the code-only package (without deleting `data/`):
+```
+git add -A
+git commit -m "Upgrade liquidity intelligence Production R2"
+git push origin main
+```
 
-`Macro().currency().interest_rate()` được lưu thành `funding_rate_proxy_bronze.csv`; KHÔNG được gắn nhãn interbank.
-
-Template:
-`templates/interbank_manual_template.csv`
-
-### 3) LPI
-- ON/interbank z-score nếu có.
-- FX 5-day pressure z-score.
-- OMO pressure z-score.
-- Cần tối thiểu 2 thành phần ACTUAL để LPI tồn tại.
-- Không tạo history giả.
-
-### 4) Upgrade-safe
-Code package không chứa `data/`, do đó copy bản mới không làm mất Bronze ACTUAL/model outputs cũ.
-
-## Chạy
+Then run:
 `REFRESH_BRONZE_BUILD_MODELS_AND_PUSH.bat`
 
-## Nếu interbank Vnstock vẫn 404
-Tạo file:
-`data/interbank_manual.csv`
+## Interbank manual/public actual
+Use the `INTERBANK_INPUT` sheet in the Master workbook:
+- Date
+- Overnight Rate (% p.a.)
+- Source URL
+- Source Name
+- Data Type = ACTUAL
 
-Schema:
-`date,overnight_rate,source_url,source_name,data_type`
-
-Chỉ nhập dữ liệu thực và giữ URL nguồn.
+The BAT exports it only when at least 10 valid observations exist. It never overwrites an existing actual file with an empty template.

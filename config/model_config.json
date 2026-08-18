@@ -3,9 +3,11 @@
   "backtest_days": 20,
   "min_daily_observations": 80,
   "min_markov_observations": 120,
-  "min_monthly_var_observations": 36,
   "z_window": 60,
   "bank_stress_beta_per_lpi": 0.15,
   "bank_actual_min_coverage": 0.6,
-  "lpi_min_components": 2
+  "lpi_min_components": 2,
+  "amber_threshold": 60,
+  "red_threshold": 75,
+  "nim_red_threshold": 0.02
 }
