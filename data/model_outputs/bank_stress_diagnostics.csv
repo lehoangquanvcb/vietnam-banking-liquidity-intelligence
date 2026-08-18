@@ -1,2 +1,2 @@
-﻿bank_universe,bronze_rows,fallback_rows,valid_base
-20,0,20,20
+﻿bank_universe,bronze_full_tickers,hybrid_tickers,fallback_tickers,actual_metric_fields,valid_base
+20,0,0,20,0,20

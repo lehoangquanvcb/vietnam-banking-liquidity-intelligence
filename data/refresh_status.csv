@@ -1,29 +1,29 @@
 ﻿dataset,status,message,Retrieved At
-bank:VCB,OK,,2026-08-18T15:31:43+07:00
-bank:BID,OK,,2026-08-18T15:32:06+07:00
-bank:CTG,OK,,2026-08-18T15:32:30+07:00
-bank:TCB,OK,,2026-08-18T15:32:55+07:00
-bank:MBB,OK,,2026-08-18T15:33:18+07:00
-bank:ACB,OK,,2026-08-18T15:33:41+07:00
-bank:HDB,OK,,2026-08-18T15:34:03+07:00
-bank:VPB,OK,,2026-08-18T15:34:26+07:00
-bank:STB,OK,,2026-08-18T15:34:48+07:00
-bank:VIB,OK,,2026-08-18T15:35:11+07:00
-bank:SHB,OK,,2026-08-18T15:35:34+07:00
-bank:TPB,OK,,2026-08-18T15:35:55+07:00
-bank:LPB,OK,,2026-08-18T15:36:18+07:00
-bank:OCB,OK,,2026-08-18T15:36:39+07:00
-bank:MSB,OK,,2026-08-18T15:37:03+07:00
-bank:SSB,OK,,2026-08-18T15:37:26+07:00
-bank:EIB,OK,,2026-08-18T15:37:47+07:00
-bank:NAB,OK,,2026-08-18T15:38:10+07:00
-bank:KLB,OK,,2026-08-18T15:38:36+07:00
-bank:BAB,OK,,2026-08-18T15:39:01+07:00
-omo,OK,,2026-08-18T15:39:02+07:00
-fx,OK,,2026-08-18T15:39:02+07:00
-policy_rate,OK,,2026-08-18T15:39:03+07:00
-m2,EMPTY,,2026-08-18T15:39:04+07:00
-credit,EMPTY,,2026-08-18T15:39:04+07:00
-cpi,EMPTY,,2026-08-18T15:39:05+07:00
-budget,ERROR,Failed to fetch data: 404 - Not Found,2026-08-18T15:39:05+07:00
-interbank,ERROR,interest_rate() failed: API request failed: Expecting value: line 1 column 2 (char 1),2026-08-18T15:39:08+07:00
+bank:VCB,ERROR,isna is not defined for MultiIndex,2026-08-18T15:49:07+07:00
+bank:BID,ERROR,isna is not defined for MultiIndex,2026-08-18T15:49:29+07:00
+bank:CTG,ERROR,isna is not defined for MultiIndex,2026-08-18T15:49:51+07:00
+bank:TCB,ERROR,isna is not defined for MultiIndex,2026-08-18T15:50:12+07:00
+bank:MBB,ERROR,isna is not defined for MultiIndex,2026-08-18T15:50:35+07:00
+bank:ACB,ERROR,isna is not defined for MultiIndex,2026-08-18T15:50:57+07:00
+bank:HDB,ERROR,isna is not defined for MultiIndex,2026-08-18T15:51:19+07:00
+bank:VPB,ERROR,isna is not defined for MultiIndex,2026-08-18T15:51:42+07:00
+bank:STB,ERROR,isna is not defined for MultiIndex,2026-08-18T15:52:03+07:00
+bank:VIB,ERROR,isna is not defined for MultiIndex,2026-08-18T15:52:25+07:00
+bank:SHB,ERROR,isna is not defined for MultiIndex,2026-08-18T15:52:47+07:00
+bank:TPB,ERROR,isna is not defined for MultiIndex,2026-08-18T15:53:09+07:00
+bank:LPB,ERROR,isna is not defined for MultiIndex,2026-08-18T15:53:31+07:00
+bank:OCB,ERROR,isna is not defined for MultiIndex,2026-08-18T15:53:54+07:00
+bank:MSB,ERROR,isna is not defined for MultiIndex,2026-08-18T15:54:15+07:00
+bank:SSB,ERROR,isna is not defined for MultiIndex,2026-08-18T15:54:37+07:00
+bank:EIB,ERROR,isna is not defined for MultiIndex,2026-08-18T15:55:00+07:00
+bank:NAB,ERROR,isna is not defined for MultiIndex,2026-08-18T15:55:20+07:00
+bank:KLB,ERROR,isna is not defined for MultiIndex,2026-08-18T15:55:43+07:00
+bank:BAB,ERROR,isna is not defined for MultiIndex,2026-08-18T15:56:07+07:00
+omo,OK,,2026-08-18T15:56:08+07:00
+fx,OK,,2026-08-18T15:56:09+07:00
+policy_rate,OK,,2026-08-18T15:56:09+07:00
+m2,EMPTY,,2026-08-18T15:56:10+07:00
+credit,EMPTY,,2026-08-18T15:56:10+07:00
+cpi,EMPTY,,2026-08-18T15:56:11+07:00
+budget,DEGRADED,non-core dataset unavailable: Failed to fetch data: 404 - Not Found,2026-08-18T15:56:11+07:00
+interbank,ERROR,day_length_365: returned 365 rows but no ON match | length_365: returned 365 rows but no ON match | day_length_180: returned 180 rows but no ON match | length_180: returned 180 rows but no ON match | day_length_90: returned 90 rows but no ON match | length_90: returned 90 rows but no ON match,2026-08-18T15:56:15+07:00

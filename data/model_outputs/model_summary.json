@@ -24,7 +24,9 @@
   "interbank_source": "NONE",
   "bank_stress": {
     "valid_base": 20,
+    "bronze_full_tickers": 0,
+    "hybrid_tickers": 0,
     "fallback_tickers": 20
   },
-  "generated_at": "2026-08-18T15:39:17.242873+07:00"
+  "generated_at": "2026-08-18T15:56:24.489528+07:00"
 }
