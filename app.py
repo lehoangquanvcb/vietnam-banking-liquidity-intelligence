@@ -126,13 +126,15 @@ with st.sidebar:
     else:
         st.warning("🟠 Chưa có Bronze bank file")
     coverage=pd.to_numeric(banks["MetricCoverage"],errors="coerce") if len(banks) and "MetricCoverage" in banks.columns else pd.Series(dtype=float)
-    valid=int((coverage>=.60).sum()) if len(coverage) else 0
-    st.write(f"Bronze đủ stress metrics: **{valid}**")
+    full=int((coverage>=.60).sum()) if len(coverage) else 0
+    any_actual=int((coverage>0).sum()) if len(coverage) else 0
+    st.write(f"Bronze coverage ≥60%: **{full}**")
+    st.write(f"Có ít nhất 1 metric Bronze: **{any_actual}**")
     st.write(f"LPI model: **{summary.get('lpi',{}).get('status','NO_MODEL')}**")
     st.write(f"Interbank model: **{summary.get('interbank',{}).get('status','NO_MODEL')}**")
     st.write(f"Interbank source: **{summary.get('interbank_source','NONE')}**")
     if runtime_fallback_active:
-        st.warning("Stress pages đang dùng runtime ASSUMPTION fallback vì model output chưa hợp lệ.")
+        st.warning("Stress pages đang dùng runtime ASSUMPTION fallback do model output hiện tại chưa hợp lệ.")
     st.caption("Code-only upgrade: package không chứa data/, nên không ghi đè Bronze ACTUAL.")
 
 tabs=st.tabs(["Tổng quan","Thanh khoản hệ thống","Lãi suất liên ngân hàng","Ngân hàng & Funding Stress","Stress Lab","Diagnostics & dữ liệu"])
@@ -219,8 +221,12 @@ with tabs[3]:
                        hover_data=["Coverage","Data Type","Source Mode","FundingCostShock_ppt","StressedNIM"])
             fig.update_layout(height=430,yaxis_range=[0,105]);st.plotly_chart(fig,use_container_width=True)
             bronze_used=int((validrows["Source Mode"]=="BRONZE").sum())
+            hybrid_used=int((validrows["Source Mode"]=="HYBRID").sum())
             fallback_used=int((validrows["Source Mode"]=="FALLBACK").sum())
-            st.info(f"Stress model: **{bronze_used} Bronze ACTUAL đủ coverage** + **{fallback_used} ASSUMPTION fallback**.")
+            st.info(
+                f"Stress model: **{bronze_used} BRONZE** + **{hybrid_used} HYBRID** + "
+                f"**{fallback_used} FALLBACK**. HYBRID nghĩa là giữ metric Bronze có thật và chỉ bù phần thiếu bằng assumption."
+            )
         st.dataframe(safe(b),hide_index=True,use_container_width=True)
     else:
         st.error("Không có bank stress output và runtime fallback cũng không tạo được — kiểm tra config/bank_fallback_assumptions.csv.")
@@ -253,7 +259,7 @@ with tabs[5]:
     st.markdown("**Governance:** ARIMA chỉ được dùng nếu RMSE holdout thấp hơn naive benchmark; nếu không model chuyển sang `NAIVE_RANDOM_WALK`.")
     st.subheader("Bronze Data Quality")
     if len(banks):
-        cols=[c for c in ["Ticker","LDR","CASA","InterbankDep","CreditDepositGap","NIM","MetricCoverage","ParseStatus"] if c in banks.columns]
+        cols=[c for c in ["Ticker","LDR","CASA","InterbankDep","CreditDepositGap","NIM","MetricCoverage","ActualMetricCount","ParseStatus","ParserCall"] if c in banks.columns]
         st.dataframe(safe(banks[cols]),hide_index=True,use_container_width=True)
     if len(refresh):
         st.subheader("Refresh Log")

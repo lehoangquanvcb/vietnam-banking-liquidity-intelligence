@@ -3,7 +3,7 @@ setlocal EnableExtensions
 cd /d "%~dp0"
 
 echo ============================================================
-echo PRODUCTION R6: BRONZE -> GOVERNED MODELS -> GITHUB
+echo PRODUCTION R7: BRONZE -> GOVERNED MODELS -> GITHUB
 echo DATA/ IS PERSISTENT. DO NOT DELETE IT.
 echo ============================================================
 
@@ -39,7 +39,7 @@ echo [3/3] Commit persistent data + model outputs...
 git add data
 git diff --cached --quiet
 if %errorlevel%==0 goto :done
-git commit -m "Refresh Bronze data and Production R6 schema-locked models"
+git commit -m "Refresh Bronze data and Production R7 hardened models"
 if errorlevel 1 goto :error
 git push origin main
 if errorlevel 1 goto :error
