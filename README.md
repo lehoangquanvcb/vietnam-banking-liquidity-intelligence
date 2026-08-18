@@ -1,44 +1,65 @@
-# Vietnam Banking Liquidity Intelligence — Production R3
+# Vietnam Banking Liquidity Intelligence — R6 Schema-Locked Production Fix
 
-## Kiến trúc Bronze giữ nguyên
-Persistent PC/self-hosted runner → `vnstock_data` Bronze → ACTUAL CSV → model outputs → GitHub → Streamlit Cloud.
+## Kiến trúc giữ nguyên
+Persistent PC/self-hosted runner → `vnstock_data` Bronze → ACTUAL CSV → governed model outputs → GitHub → Streamlit Cloud.
 
-Streamlit không cài hoặc gọi Sponsor.
+Streamlit Cloud chỉ đọc repository; không cài/gọi Vnstock Sponsor.
 
-## CODE ONLY
-Package này không có `data/`. Khi nâng cấp, giữ nguyên thư mục `data/` hiện có.
+## R6 sửa theo runtime thật từ Diagnostic R5
 
-## Sửa dứt điểm Stress
-R3 có hai lớp bảo vệ:
-1. `build_models.py` luôn tạo đủ universe từ `config/bank_fallback_assumptions.csv` nếu Bronze coverage <60%.
-2. `app.py` tự tạo runtime fallback nếu `bank_stress_forecast.csv` cũ/rỗng/null.
+### 1. Interbank ON
+R5 xác nhận `Macro().currency().interest_rate()` trả bảng có:
+- `group_name = Lãi suất bình quân liên ngân hàng (%/năm)`
+- `name = Qua đêm`
+- `value`
+- `time`
+- `source = Ngân hàng Nhà nước Việt Nam`
 
-Do đó Funding Stress và Stress Lab không còn được phép trống. Mọi fallback đều gắn nhãn `ASSUMPTION / FALLBACK`.
+R6 vì vậy:
+1. gọi `interest_rate(length=3650)`;
+2. lưu raw audit vào `data/interest_rate_raw_bronze.csv`;
+3. lọc đúng group liên ngân hàng;
+4. lọc tenor Qua đêm;
+5. ghi `data/interbank_bronze.csv` với `date` + `overnight_rate`.
 
-## Forecast governance
-ARIMA chỉ được dùng nếu thắng naive benchmark trên holdout RMSE. Nếu không, dùng `NAIVE_RANDOM_WALK`, Confidence=LOW.
+Không dùng các nhóm lãi suất tiền gửi/cho vay khác để thay thế ON.
 
-## Interbank
-True interbank:
-1. Bronze `interbank_rate()`;
-2. `data/interbank_manual.csv` ACTUAL/public.
+### 2. Bank stress metrics
+R5 xác nhận schema long-format:
+`period, id, name, ..., value`.
 
-Funding-rate proxy được hiển thị riêng khi interbank thiếu, nhưng không dùng để forecast ON.
+R6 đọc trực tiếp Semantic ID:
+- `RT_BANK_LDR`
+- `RT_BANK_CASA`
+- `RT_BANK_NIM` nếu có, sau đó mới dùng name fallback
+- `BS_CUSTOMER_DEPOSITS`
+- `BS_TOTAL_ASSETS`
+- customer loans aliases
+- `BS_PLACEMENTS_AND_BORROWINGS_FROM_CREDIT_INSTITUTIONS`
 
-## Cách nâng cấp
-GIỮ `data/`, copy code package, rồi:
-```
-git add -A
-git commit -m "Upgrade liquidity intelligence Production R3"
-git push origin main
-```
-Sau đó chạy:
+Derived:
+- `InterbankDep = interbank liabilities / total assets`
+- `CreditDepositGap = (customer loans - customer deposits) / customer deposits`
+
+Bronze ACTUAL chỉ vào stress model khi coverage >=60%; thiếu mới fallback ticker-level có nhãn `ASSUMPTION/FALLBACK`.
+
+### 3. Forecast governance
+Giữ nguyên governance:
+- >=80 observations
+- holdout RMSE
+- ARIMA chỉ dùng nếu thắng naive benchmark
+- nếu không: `NAIVE_RANDOM_WALK`, Confidence=LOW
+
+## Upgrade safety
+Package R6 **không chứa `data/`**.
+
+Giữ nguyên thư mục repository `data/`, copy đè code/config/Master rồi chạy:
 `REFRESH_BRONZE_BUILD_MODELS_AND_PUSH.bat`
 
+## Kỳ vọng sau refresh
+Sidebar nên chuyển từ:
+- `Bronze đủ stress metrics: 0`
+- `Interbank model: NO_INTERBANK_DATA`
+- `Interbank source: NONE`
 
-## R4 – Data Acquisition Fix
-- Uses current Vnstock Unified UI banking scorecard: `scorecard="banking"`.
-- Expands bank metric aliases for LDR/CASA/NIM/customer loans/customer deposits/interbank assets.
-- Probes documented `Macro().currency().interbank_rate()` signatures before compatibility calls.
-- Never relabels deposit/lending rates as true interbank.
-- Preserves local Bronze → CSV/model outputs → GitHub → Streamlit read-only architecture.
+sang trạng thái có ACTUAL coverage và interbank source `BRONZE`, nếu lịch sử lọc được đủ dài cho forecast.

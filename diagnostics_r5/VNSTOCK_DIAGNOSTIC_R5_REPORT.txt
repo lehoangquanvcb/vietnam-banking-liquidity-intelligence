@@ -1,0 +1,379 @@
+VNSTOCK DIAGNOSTIC R5
+Timestamp: 2026-08-18T15:18:15.790505+07:00
+Python executable: C:\Users\HP\.venv\Scripts\python.exe
+Python version: 3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)]
+Platform: Windows-11-10.0.26200-SP0
+Working directory: E:\Tài\Vietnam_Monetary_Banking_Liquidity_Intelligence
+
+vnstock_data version: 3.2.8
+vnstock version: 4.0.6
+pandas version: 2.3.3
+numpy version: 2.2.6
+requests version: 2.34.2
+unidecode version: 1.4.0
+
+vnstock_data import: OK
+
+========================================================================================
+API INTROSPECTION
+========================================================================================
+Fundamental constructor signature: ()
+Fundamental public attrs (1): ['equity']
+Macro constructor signature: ()
+Macro public attrs (13): ['commodity', 'cpi', 'currency', 'economy', 'exchange_rate', 'fdi', 'gdp', 'import_export', 'industry_prod', 'interest_rate', 'money_supply', 'population_labor', 'retail']
+
+========================================================================================
+TCB EQUITY OBJECT METHODS
+========================================================================================
+balance_sheet signature: (com_type=None, **B)
+ratio signature: (com_type=None, **B)
+financial_health signature: (com_type='auto', reports=None, **C)
+income_statement signature: (com_type=None, **B)
+cash_flow signature: (com_type=None, **B)
+
+----------------------------------------------------------------------------------------
+CALL: TCB_balance_sheet_doc
+----------------------------------------------------------------------------------------
+STATUS: OK
+
+========================================================================================
+DATAFRAME: TCB_balance_sheet_doc
+========================================================================================
+shape=(442, 8)
+columns:
+  - 'period' | dtype=category
+  - 'id' | dtype=string
+  - 'name' | dtype=string
+  - 'order' | dtype=Int32
+  - 'level' | dtype=category
+  - 'off_balance' | dtype=category
+  - 'unit' | dtype=category
+  - 'value' | dtype=float64
+
+head(5):
+    period                                              id                                         name  order level off_balance unit         value
+0  2026-Q2                                 BS_TOTAL_ASSETS                                 Total Assets      1     1       False  VNĐ  1.273077e+15
+1  2026-Q2                     BS_CASH_AND_PRECIOUS_METALS                     Cash and Precious Metals      2     1       False  VNĐ  3.909425e+12
+2  2026-Q2                            BS_BALANCES_WITH_SBV                            Balances With SBV      3     1       False  VNĐ  9.512798e+13
+3  2026-Q2  BS_PLACEMENTS_AND_LOANS_TO_CREDIT_INSTITUTIONS  Placements and Loans to Credit Institutions      4     1       False  VNĐ  8.541652e+13
+4  2026-Q2                           BS_TRADING_SECURITIES                           Trading Securities      8     1       False  VNĐ  3.427800e+11
+
+tail(5):
+      period                                                     id                                                    name  order level off_balance unit         value
+437  2018-Q1                                   BS_TOTAL_LIABILITIES                                       Total Liabilities     49     1       False  VNĐ  2.355369e+14
+438  2018-Q1  BS_PLACEMENTS_AND_BORROWINGS_FROM_CREDIT_INSTITUTIONS    ‣ Placements and Borrowings from Credit Institutions     51     2       False  VNĐ  2.540097e+13
+439  2018-Q1                                   BS_CUSTOMER_DEPOSITS                                     ‣ Customer Deposits     54     2       False  VNĐ  1.813906e+14
+440  2018-Q1                              BS_VALUABLE_PAPERS_ISSUED                                ‣ Valuable Papers Issued     57     2       False  VNĐ  2.007406e+13
+441  2018-Q1                                     BS_CHARTER_CAPITAL                                       • Charter Capital     65     3       False  VNĐ  1.165531e+13
+
+----------------------------------------------------------------------------------------
+CALL: TCB_balance_sheet_min
+----------------------------------------------------------------------------------------
+STATUS: OK
+
+========================================================================================
+DATAFRAME: TCB_balance_sheet_min
+========================================================================================
+shape=(2852, 8)
+columns:
+  - 'period' | dtype=category
+  - 'id' | dtype=string
+  - 'name' | dtype=string
+  - 'order' | dtype=Int32
+  - 'level' | dtype=category
+  - 'off_balance' | dtype=category
+  - 'unit' | dtype=category
+  - 'value' | dtype=float64
+
+head(5):
+    period                                              id                                                 name  order level off_balance unit         value
+0  2026-Q2                                 BS_TOTAL_ASSETS                                    TỔNG CỘNG TÀI SẢN      1     1       False  VNĐ  1.273077e+15
+1  2026-Q2                     BS_CASH_AND_PRECIOUS_METALS                   Tiền và các khoản tương đương tiền      2     1       False  VNĐ  3.909425e+12
+2  2026-Q2                            BS_BALANCES_WITH_SBV             Tiền gửi tại Ngân hàng nhà nước Việt Nam      3     1       False  VNĐ  9.512798e+13
+3  2026-Q2  BS_PLACEMENTS_AND_LOANS_TO_CREDIT_INSTITUTIONS  Tiền gửi tại các TCTD khác và cho vay các TCTD khác      4     1       False  VNĐ  8.541652e+13
+4  2026-Q2          BS_PLACEMENTS_WITH_CREDIT_INSTITUTIONS                         ‣ Tiền gửi tại các TCTD khác      5     2       False  VNĐ  7.270106e+13
+
+tail(5):
+       period                               id                                 name  order level off_balance unit         value
+2847  2018-Q1            BS_FUTURE_COMMITMENTS        • Cam kết giao dịch tương lai     80     3        True  VNĐ  0.000000e+00
+2848  2018-Q1  BS_IRREVOCABLE_LOAN_COMMITMENTS    ‣ Cam kết cho vay không huỷ ngang     81     2        True  VNĐ  0.000000e+00
+2849  2018-Q1                BS_LC_COMMITMENTS        ‣ Cam kết trong nghiệp vụ L/C     82     2        True  VNĐ  1.172010e+13
+2850  2018-Q1              BS_OTHER_GUARANTEES                      ‣ Bảo lãnh khác     83     2        True  VNĐ  1.334547e+13
+2851  2018-Q1             BS_OTHER_COMMITMENTS                       ‣ Cam kết khác     84     2        True  VNĐ  4.519659e+13
+
+----------------------------------------------------------------------------------------
+CALL: TCB_ratio_doc
+----------------------------------------------------------------------------------------
+STATUS: OK
+
+========================================================================================
+DATAFRAME: TCB_ratio_doc
+========================================================================================
+shape=(416, 7)
+columns:
+  - 'period' | dtype=category
+  - 'id' | dtype=string
+  - 'name' | dtype=string
+  - 'order' | dtype=Int32
+  - 'level' | dtype=category
+  - 'unit' | dtype=category
+  - 'value' | dtype=float64
+
+head(5):
+    period             id                      name  order level unit     value
+0  2026-Q2    RT_VALUE_PE               ‣ P/E Ratio      2     2  lần  8.304167
+1  2026-Q2    RT_VALUE_PB               ‣ P/B Ratio      3     2  lần  1.257756
+2  2026-Q2   RT_VALUE_EPS               ‣ Basic EPS      9     2  VNĐ       NaN
+3  2026-Q2  RT_VALUE_BVPS    ‣ Book Value Per Share     11     2  VNĐ       NaN
+4  2026-Q2     RT_PRT_ROE                   ‣ ROE %     17     2    %  0.147648
+
+tail(5):
+      period                    id                                  name  order level unit     value
+411  2018-Q2           RT_BANK_CIR          ‣ Cost to Income Ratio (CIR)     50     2    % -0.287723
+412  2018-Q2           RT_BANK_LDR         ‣ Loan to Deposit Ratio (LDR)     53     2    %  0.894876
+413  2018-Q2           RT_BANK_NPL    ‣ Non Performing Loans Ratio (NPL)     54     2    %  0.020373
+414  2018-Q2  RT_BANK_NPL_COVERAGE                  ‣ NPL Coverage Ratio     55     2    % -0.741846
+415  2018-Q2           RT_BANK_CAR        ‣ Capital Adequacy Ratio (CAR)     57     2    %  0.000000
+
+----------------------------------------------------------------------------------------
+CALL: TCB_ratio_min
+----------------------------------------------------------------------------------------
+STATUS: OK
+
+========================================================================================
+DATAFRAME: TCB_ratio_min
+========================================================================================
+shape=(1920, 7)
+columns:
+  - 'period' | dtype=category
+  - 'id' | dtype=string
+  - 'name' | dtype=string
+  - 'order' | dtype=Int32
+  - 'level' | dtype=category
+  - 'unit' | dtype=category
+  - 'value' | dtype=float64
+
+head(5):
+    period                     id                               name  order level unit     value
+0  2026-Q2  RT_CAT_INFO_VALUATION  ĐỊNH GIÁ & THÔNG TIN DOANH NGHIỆP      1     1            NaN
+1  2026-Q2            RT_VALUE_PE                       ‣ P/E cơ bản      2     2  lần  8.304167
+2  2026-Q2            RT_VALUE_PB                              ‣ P/B      3     2  lần  1.257756
+3  2026-Q2            RT_VALUE_PS                              ‣ P/S      4     2  lần  3.908602
+4  2026-Q2          RT_VALUE_P_CF                             ‣ P/CF      5     2  lần  5.327993
+
+tail(5):
+       period                          id                                 name  order level unit     value
+1915  2018-Q2  RT_BANK_PROVISION_TO_LOANS          ‣ Tỷ lệ dự phòng trên dư nợ     56     2    % -0.014466
+1916  2018-Q2                 RT_BANK_CAR                  ‣ Hệ số an toàn vốn     57     2    %  0.000000
+1917  2018-Q2                RT_BANK_CASA        ‣ Tỷ lệ tiền gửi không kỳ hạn     58     2    %  0.246199
+1918  2018-Q2     RT_BANK_EQUITY_TO_LOANS            ‣ Vốn chủ / Dư nợ cho vay     59     2    %  0.284519
+1919  2018-Q2        RT_BANK_LLR_TO_LOANS    ‣ Dự phòng rủi ro / Dư nợ cho vay     60     2    %  0.015114
+
+----------------------------------------------------------------------------------------
+CALL: TCB_financial_health_bank
+----------------------------------------------------------------------------------------
+STATUS: OK
+
+========================================================================================
+DATAFRAME: TCB_financial_health_bank
+========================================================================================
+shape=(21, 9)
+columns:
+  - 'id' | dtype=string
+  - 'item' | dtype=object
+  - 'level' | dtype=int64
+  - 'order' | dtype=int64
+  - 'unit' | dtype=object
+  - '2025-Q3' | dtype=float64
+  - '2025-Q4' | dtype=float64
+  - '2026-Q1' | dtype=float64
+  - '2026-Q2' | dtype=float64
+
+head(5):
+                            id                         item  level  order unit       2025-Q3       2025-Q4       2026-Q1       2026-Q2
+0         IS_PROFIT_BEFORE_TAX         IS_PROFIT_BEFORE_TAX      1      8  VNĐ  8.250016e+12  9.153234e+12  8.869970e+12  9.670016e+12
+1      IS_NET_PROFIT_AFTER_TAX      IS_NET_PROFIT_AFTER_TAX      1      9  VNĐ  6.613525e+12  6.979826e+12  6.950280e+12  7.726642e+12
+2         IS_MINORITY_INTEREST         IS_MINORITY_INTEREST      1     10  VNĐ  1.941810e+11  3.042640e+11  2.791990e+11  3.765830e+11
+3  BS_CASH_AND_PRECIOUS_METALS  BS_CASH_AND_PRECIOUS_METALS      1     11  VNĐ  4.045689e+12  4.360821e+12  5.467700e+12  3.909425e+12
+4              BS_FIXED_ASSETS              BS_FIXED_ASSETS      1     18  VNĐ  1.204353e+13  1.212293e+13  1.158581e+13  1.232476e+13
+
+tail(5):
+                      id                              item  level  order unit   2025-Q3   2025-Q4   2026-Q1   2026-Q2
+16           RT_BANK_CIR        Cost to Income Ratio (CIR)      1     37    % -0.315462 -0.307775 -0.282941 -0.309209
+17           RT_BANK_LDR       Loan to Deposit Ratio (LDR)      1     38    %  1.288400  1.240270  1.328531  1.279098
+18           RT_BANK_NPL  Non-Performing Loans Ratio (NPL)      1     39    %  0.011629  0.010680  0.010912  0.010823
+19  RT_BANK_NPL_COVERAGE                NPL Coverage Ratio      1     40    % -1.192447 -1.280544 -1.293932 -1.256439
+20           RT_BANK_CAR      Capital Adequacy Ratio (CAR)      1     41    %  0.000000  0.000000  0.000000  0.000000
+
+----------------------------------------------------------------------------------------
+CALL: TCB_financial_health_auto
+----------------------------------------------------------------------------------------
+STATUS: OK
+
+========================================================================================
+DATAFRAME: TCB_financial_health_auto
+========================================================================================
+shape=(21, 9)
+columns:
+  - 'id' | dtype=string
+  - 'item' | dtype=object
+  - 'level' | dtype=int64
+  - 'order' | dtype=int64
+  - 'unit' | dtype=object
+  - '2025-Q3' | dtype=float64
+  - '2025-Q4' | dtype=float64
+  - '2026-Q1' | dtype=float64
+  - '2026-Q2' | dtype=float64
+
+head(5):
+                            id                         item  level  order unit       2025-Q3       2025-Q4       2026-Q1       2026-Q2
+0         IS_PROFIT_BEFORE_TAX         IS_PROFIT_BEFORE_TAX      1      8  VNĐ  8.250016e+12  9.153234e+12  8.869970e+12  9.670016e+12
+1      IS_NET_PROFIT_AFTER_TAX      IS_NET_PROFIT_AFTER_TAX      1      9  VNĐ  6.613525e+12  6.979826e+12  6.950280e+12  7.726642e+12
+2         IS_MINORITY_INTEREST         IS_MINORITY_INTEREST      1     10  VNĐ  1.941810e+11  3.042640e+11  2.791990e+11  3.765830e+11
+3  BS_CASH_AND_PRECIOUS_METALS  BS_CASH_AND_PRECIOUS_METALS      1     11  VNĐ  4.045689e+12  4.360821e+12  5.467700e+12  3.909425e+12
+4              BS_FIXED_ASSETS              BS_FIXED_ASSETS      1     18  VNĐ  1.204353e+13  1.212293e+13  1.158581e+13  1.232476e+13
+
+tail(5):
+                      id                              item  level  order unit   2025-Q3   2025-Q4   2026-Q1   2026-Q2
+16           RT_BANK_CIR        Cost to Income Ratio (CIR)      1     37    % -0.315462 -0.307775 -0.282941 -0.309209
+17           RT_BANK_LDR       Loan to Deposit Ratio (LDR)      1     38    %  1.288400  1.240270  1.328531  1.279098
+18           RT_BANK_NPL  Non-Performing Loans Ratio (NPL)      1     39    %  0.011629  0.010680  0.010912  0.010823
+19  RT_BANK_NPL_COVERAGE                NPL Coverage Ratio      1     40    % -1.192447 -1.280544 -1.293932 -1.256439
+20           RT_BANK_CAR      Capital Adequacy Ratio (CAR)      1     41    %  0.000000  0.000000  0.000000  0.000000
+
+Bank metric candidate rows found: 1232
+
+========================================================================================
+MACRO / INTERBANK PROBE
+========================================================================================
+Macro public attrs: ['commodity', 'cpi', 'currency', 'economy', 'exchange_rate', 'fdi', 'gdp', 'import_export', 'industry_prod', 'interest_rate', 'money_supply', 'population_labor', 'retail']
+Macro.currency() type: <class 'vnstock_data.ui.domains.macro.currency.CurrencyReference'>
+Macro.currency() public attrs: ['deposit_rate', 'exchange_rate', 'interbank_rate', 'interest_rate', 'omo', 'policy_rate', 'symbol']
+currency.interbank_rate signature: (period='all', **B)
+currency.interest_rate signature: (**B)
+currency.omo signature: (**B)
+currency.exchange_rate signature: (**B)
+currency.policy_rate signature: (**B)
+
+----------------------------------------------------------------------------------------
+CALL: interbank_no_args
+----------------------------------------------------------------------------------------
+STATUS: ERROR: RecursionError('maximum recursion depth exceeded')
+Traceback (most recent call last):
+  File "E:\Tài\Vietnam_Monetary_Banking_Liquidity_Intelligence\scripts\probe_vnstock_r5.py", line 235, in <module>
+    df=fn()
+       ^^^^
+  File "E:\Tài\Vietnam_Monetary_Banking_Liquidity_Intelligence\scripts\probe_vnstock_r5.py", line 219, in <lambda>
+    ("interbank_no_args", lambda: fn()),
+                                  ^^^^
+  File "E:\Tài\Vietnam_Monetary_Banking_Liquidity_Intelligence\scripts\probe_vnstock_r5.py", line 219, in <lambda>
+    ("interbank_no_args", lambda: fn()),
+                                  ^^^^
+  File "E:\Tài\Vietnam_Monetary_Banking_Liquidity_Intelligence\scripts\probe_vnstock_r5.py", line 219, in <lambda>
+    ("interbank_no_args", lambda: fn()),
+                                  ^^^^
+  [Previous line repeated 996 more times]
+RecursionError: maximum recursion depth exceeded
+
+
+----------------------------------------------------------------------------------------
+CALL: interbank_length_30
+----------------------------------------------------------------------------------------
+STATUS: ERROR: TypeError("<lambda>() got an unexpected keyword argument 'length'")
+Traceback (most recent call last):
+  File "E:\Tài\Vietnam_Monetary_Banking_Liquidity_Intelligence\scripts\probe_vnstock_r5.py", line 235, in <module>
+    df=fn()
+       ^^^^
+  File "E:\Tài\Vietnam_Monetary_Banking_Liquidity_Intelligence\scripts\probe_vnstock_r5.py", line 220, in <lambda>
+    ("interbank_length_30", lambda: fn(length=30)),
+                                    ^^^^^^^^^^^^^
+TypeError: <lambda>() got an unexpected keyword argument 'length'
+
+
+----------------------------------------------------------------------------------------
+CALL: interbank_period_day_length_30
+----------------------------------------------------------------------------------------
+STATUS: ERROR: TypeError("<lambda>() got an unexpected keyword argument 'period'")
+Traceback (most recent call last):
+  File "E:\Tài\Vietnam_Monetary_Banking_Liquidity_Intelligence\scripts\probe_vnstock_r5.py", line 235, in <module>
+    df=fn()
+       ^^^^
+  File "E:\Tài\Vietnam_Monetary_Banking_Liquidity_Intelligence\scripts\probe_vnstock_r5.py", line 221, in <lambda>
+    ("interbank_period_day_length_30", lambda: fn(period="day",length=30)),
+                                               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: <lambda>() got an unexpected keyword argument 'period'
+
+
+----------------------------------------------------------------------------------------
+CALL: interbank_start_end_day
+----------------------------------------------------------------------------------------
+STATUS: ERROR: TypeError("<lambda>() got an unexpected keyword argument 'start'")
+Traceback (most recent call last):
+  File "E:\Tài\Vietnam_Monetary_Banking_Liquidity_Intelligence\scripts\probe_vnstock_r5.py", line 235, in <module>
+    df=fn()
+       ^^^^
+  File "E:\Tài\Vietnam_Monetary_Banking_Liquidity_Intelligence\scripts\probe_vnstock_r5.py", line 222, in <lambda>
+    ("interbank_start_end_day", lambda: fn(start="2026-07-01",end="2026-08-15",period="day")),
+                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: <lambda>() got an unexpected keyword argument 'start'
+
+
+----------------------------------------------------------------------------------------
+CALL: interbank_start_day
+----------------------------------------------------------------------------------------
+STATUS: ERROR: TypeError("<lambda>() got an unexpected keyword argument 'start'")
+Traceback (most recent call last):
+  File "E:\Tài\Vietnam_Monetary_Banking_Liquidity_Intelligence\scripts\probe_vnstock_r5.py", line 235, in <module>
+    df=fn()
+       ^^^^
+  File "E:\Tài\Vietnam_Monetary_Banking_Liquidity_Intelligence\scripts\probe_vnstock_r5.py", line 223, in <lambda>
+    ("interbank_start_day", lambda: fn(start="2026-07-01",period="day")),
+                                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: <lambda>() got an unexpected keyword argument 'start'
+
+
+----------------------------------------------------------------------------------------
+CALL: interbank_start_month
+----------------------------------------------------------------------------------------
+STATUS: ERROR: TypeError("<lambda>() got an unexpected keyword argument 'start'")
+Traceback (most recent call last):
+  File "E:\Tài\Vietnam_Monetary_Banking_Liquidity_Intelligence\scripts\probe_vnstock_r5.py", line 235, in <module>
+    df=fn()
+       ^^^^
+  File "E:\Tài\Vietnam_Monetary_Banking_Liquidity_Intelligence\scripts\probe_vnstock_r5.py", line 224, in <lambda>
+    ("interbank_start_month", lambda: fn(start="2025-01-01",period="month")),
+                                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: <lambda>() got an unexpected keyword argument 'start'
+
+
+Funding-rate proxy call: OK (NOT INTERBANK)
+
+========================================================================================
+DATAFRAME: funding_rate_proxy_interest_rate
+========================================================================================
+shape=(30, 6)
+columns:
+  - 'time' | dtype=object
+  - 'group_name' | dtype=object
+  - 'name' | dtype=object
+  - 'value' | dtype=float64
+  - 'unit' | dtype=object
+  - 'source' | dtype=object
+
+head(5):
+                   time                                 group_name        name  value unit                       source
+report_time                                                                                                            
+2026-07-30   2026-07-29  Lãi suất bình quân liên ngân hàng (%/năm)   6 tháng     7.22    %  Ngân hàng Nhà nước Việt Nam
+2026-07-30   2026-07-29  Lãi suất bình quân liên ngân hàng (%/năm)   3 tháng     7.34    %  Ngân hàng Nhà nước Việt Nam
+2026-07-30   2026-07-29  Lãi suất bình quân liên ngân hàng (%/năm)     2 tuần    5.80    %  Ngân hàng Nhà nước Việt Nam
+2026-07-30   2026-07-29  Lãi suất bình quân liên ngân hàng (%/năm)     1 tuần    4.49    %  Ngân hàng Nhà nước Việt Nam
+2026-07-30   2026-07-29  Lãi suất bình quân liên ngân hàng (%/năm)     Qua đêm   0.75    %  Ngân hàng Nhà nước Việt Nam
+
+tail(5):
+                   time                                 group_name        name       value    unit                       source
+report_time                                                                                                                    
+2026-07-31   2026-07-30                                   Doanh số   3 tháng       1840.00  Tỷ VNĐ  Ngân hàng Nhà nước Việt Nam
+2026-07-31   2026-07-30                                   Doanh số    1 tháng      2950.00  Tỷ VNĐ  Ngân hàng Nhà nước Việt Nam
+2026-07-31   2026-07-30                                   Doanh số     1 tuần     12930.00  Tỷ VNĐ  Ngân hàng Nhà nước Việt Nam
+2026-07-31   2026-07-30  Lãi suất bình quân liên ngân hàng (%/năm)     1 tuần         4.83       %  Ngân hàng Nhà nước Việt Nam
+2026-07-31   2026-07-30                                   Doanh số     Qua đêm  1083105.00  Tỷ VNĐ  Ngân hàng Nhà nước Việt Nam

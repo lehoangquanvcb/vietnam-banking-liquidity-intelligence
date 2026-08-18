@@ -189,8 +189,8 @@ with tabs[2]:
             st.plotly_chart(px.line(t.tail(260),x="date",y="interbank",title="Lãi suất ON thực"),use_container_width=True)
             st.warning("Đã có interbank ACTUAL nhưng chưa đủ ngưỡng forecast.")
     else:
-        st.warning("Chưa có chuỗi interbank thực. Hệ thống không dùng deposit/lending rate để giả làm interbank.")
-        st.markdown("Nguồn ưu tiên: **Vnstock true interbank → `data/interbank_manual.csv` ACTUAL/public**.")
+        st.warning("Chưa có chuỗi interbank thực sau bước lọc dữ liệu Bronze. Hệ thống không dùng lãi suất tiền gửi/cho vay khác để giả làm interbank.")
+        st.markdown("Nguồn ưu tiên: **Vnstock `interest_rate()` lọc nhóm Interbank + kỳ hạn Qua đêm → `data/interbank_manual.csv` ACTUAL/public**.")
         # Useful context instead of an empty page: show funding-rate proxy separately and clearly labelled.
         if len(funding_proxy):
             dc=next((c for c in ["date","time","period"] if c in funding_proxy.columns),None)

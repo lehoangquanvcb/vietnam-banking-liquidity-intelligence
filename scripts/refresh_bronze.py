@@ -1,7 +1,7 @@
 
 from pathlib import Path
 from datetime import datetime
-import pandas as pd, numpy as np, json, re, time, sys
+import pandas as pd, numpy as np, json, time, sys
 
 ROOT=Path(__file__).resolve().parents[1]
 DATA=ROOT/"data"; RAW=DATA/"raw_bank"
@@ -14,85 +14,98 @@ except Exception as e:
     print("ERROR: vnstock_data unavailable:",repr(e)); sys.exit(2)
 
 def now(): return datetime.now().astimezone().isoformat(timespec="seconds")
-def norm(x): return re.sub(r"[^a-z0-9]+"," ",str(x).lower()).strip()
-def scale(v):
-    if v is None or pd.isna(v): return np.nan
-    v=float(v)
-    return v/100 if abs(v)>2 else v
 
-def flatten(df):
+def latest_id(df, ids):
+    if df is None or len(df)==0 or "id" not in df.columns:
+        return np.nan
     x=df.copy()
-    x.columns=[" | ".join(map(str,c)) if isinstance(c,tuple) else str(c) for c in x.columns]
-    return x
+    x["id"]=x["id"].astype(str)
+    ids_upper=[str(i).upper() for i in ids]
+    m=x["id"].str.upper().isin(ids_upper)
+    if not m.any():
+        return np.nan
+    x=x[m].copy()
+    if "period" in x.columns:
+        # Periods are YYYY-Qn strings; lexical order works.
+        x=x.sort_values("period")
+    if "value" in x.columns:
+        v=pd.to_numeric(x["value"],errors="coerce").dropna()
+        return float(v.iloc[-1]) if len(v) else np.nan
+    # financial_health wide schema
+    period_cols=[c for c in x.columns if str(c)[:4].isdigit() and ("Q" in str(c) or "-" in str(c))]
+    if period_cols:
+        period_cols=sorted(period_cols)
+        v=pd.to_numeric(x.iloc[0][period_cols],errors="coerce").dropna()
+        return float(v.iloc[-1]) if len(v) else np.nan
+    return np.nan
 
-def find_metric(df, terms=()):
-    if df is None or len(df)==0:return None
-    x=flatten(df)
-    # label columns first
-    label_cols=[c for c in x.columns if norm(c) in {"id","code","metric","indicator","name","item","label"}]
-    label_cols += [c for c in x.columns[:min(4,len(x.columns))] if c not in label_cols]
-    for lc in label_cols:
-        labels=x[lc].astype(str).map(norm)
-        for term in terms:
-            m=labels.str.contains(norm(term),regex=False,na=False)
-            if m.any():
-                for c in reversed(x.columns):
-                    if c==lc: continue
-                    v=pd.to_numeric(x.loc[m,c],errors="coerce").dropna()
-                    if len(v): return float(v.iloc[0])
-    # wide columns
-    for c in x.columns:
-        if any(norm(term) in norm(c) for term in terms):
-            v=pd.to_numeric(x[c],errors="coerce").dropna()
-            if len(v): return float(v.iloc[-1])
-    # row scan
-    for _,row in x.iterrows():
-        lead=" | ".join(norm(v) for v in row.values[:min(6,len(row))])
-        if any(norm(term) in lead for term in terms):
-            for v0 in reversed(row.values):
-                v=pd.to_numeric(pd.Series([v0]),errors="coerce").dropna()
-                if len(v): return float(v.iloc[0])
-    return None
+def latest_name(df, terms):
+    if df is None or len(df)==0:
+        return np.nan
+    label_col="name" if "name" in df.columns else "item" if "item" in df.columns else None
+    if not label_col:
+        return np.nan
+    s=df[label_col].astype(str).str.lower()
+    mask=pd.Series(False,index=df.index)
+    for t in terms:
+        mask=mask | s.str.contains(str(t).lower(),regex=False,na=False)
+    if not mask.any():
+        return np.nan
+    x=df[mask].copy()
+    if "period" in x.columns:
+        x=x.sort_values("period")
+    if "value" in x.columns:
+        v=pd.to_numeric(x["value"],errors="coerce").dropna()
+        return float(v.iloc[-1]) if len(v) else np.nan
+    period_cols=[c for c in x.columns if str(c)[:4].isdigit() and ("Q" in str(c) or "-" in str(c))]
+    if period_cols:
+        period_cols=sorted(period_cols)
+        v=pd.to_numeric(x.iloc[0][period_cols],errors="coerce").dropna()
+        return float(v.iloc[-1]) if len(v) else np.nan
+    return np.nan
 
 def fetch_bank(ticker):
-    fun=Fundamental()
-    try:eq=fun.equity(ticker)
-    except Exception:eq=fun.equity(symbol=ticker)
-
-    calls=[]
-    try:calls.append(("balance_sheet",eq.balance_sheet(period="quarter",lang="en",scorecard="banking",dropna=False)))
+    eq=Fundamental().equity(ticker)
+    bs=eq.balance_sheet(period="quarter",lang="en",format="long",com_type="Bank",drop_empty=False)
+    ratio=eq.ratio(period="quarter",lang="en",format="long",com_type="Bank",drop_empty=False)
+    try:
+        health=eq.financial_health(com_type="bank",reports=4,lang="en")
     except Exception:
-        try:calls.append(("balance_sheet",eq.balance_sheet(period="quarter",lang="en",format="long",com_type="Bank",drop_empty=False)))
-        except Exception:calls.append(("balance_sheet",eq.balance_sheet(period="quarter")))
-    try:calls.append(("ratio",eq.ratio(period="quarter",lang="en",scorecard="banking",dropna=False)))
-    except Exception:
-        try:calls.append(("ratio",eq.ratio(period="quarter",lang="en",format="long",com_type="Bank",drop_empty=False)))
-        except Exception:
-            try:calls.append(("ratio",eq.ratio(period="quarter")))
-            except Exception:calls.append(("ratio",pd.DataFrame()))
-    try:calls.append(("financial_health",eq.financial_health(scorecard="banking",lang="en",limit=8)))
-    except Exception:calls.append(("financial_health",pd.DataFrame()))
+        try: health=eq.financial_health(scorecard="bank",lang="en",limit=4)
+        except Exception: health=pd.DataFrame()
 
-    tables={k:v for k,v in calls}
-    for name,df in calls:
+    for name,df in [("balance_sheet",bs),("ratio",ratio),("financial_health",health)]:
         if df is not None and len(df):
             df.to_csv(RAW/f"{ticker}_{name}.csv",index=False,encoding="utf-8-sig")
 
-    bs=tables["balance_sheet"]; ratio=tables["ratio"]; health=tables["financial_health"]
-    ldr=find_metric(health,["ldr","loan to deposit","loans/deposits","customer loan/customer deposit"]) or find_metric(ratio,["ldr","loan to deposit","loans/deposits"])
-    casa=find_metric(health,["casa","current account saving","current account savings account","demand deposit"]) or find_metric(ratio,["casa","current account saving","demand deposit"])
-    nim=find_metric(health,["nim","net interest margin","interest margin"]) or find_metric(ratio,["nim","net interest margin","interest margin"])
+    # Schema locked from R5 diagnostic.
+    ldr=latest_id(ratio,["RT_BANK_LDR"])
+    casa=latest_id(ratio,["RT_BANK_CASA"])
+    nim=latest_id(ratio,["RT_BANK_NIM"])
+    if pd.isna(nim): nim=latest_name(ratio,["net interest margin","nim"])
 
-    loans=find_metric(bs,["customer loans","loans to customers","customer loan","cho vay khách hàng","loans and advances to customers"])
-    deposits=find_metric(bs,["customer deposits","deposits from customers","customer deposit","tiền gửi khách hàng","deposits of customers"])
-    assets=find_metric(bs,["total assets","tổng tài sản"])
-    ib=find_metric(bs,["interbank","due from credit institutions","deposits at credit institutions","credit institutions","tổ chức tín dụng"])
+    loans=latest_id(bs,[
+        "BS_CUSTOMER_LOANS","BS_LOANS_TO_CUSTOMERS","BS_LOANS_AND_ADVANCES_TO_CUSTOMERS"
+    ])
+    if pd.isna(loans): loans=latest_name(bs,["customer loans","loans to customers"])
 
-    if (ldr is None or pd.isna(ldr)) and loans is not None and deposits not in (None,0):ldr=loans/deposits
-    ibdep=ib/assets if ib is not None and assets not in (None,0) else np.nan
-    gap=(loans-deposits)/deposits if loans is not None and deposits not in (None,0) else np.nan
+    deposits=latest_id(bs,["BS_CUSTOMER_DEPOSITS"])
+    if pd.isna(deposits): deposits=latest_name(bs,["customer deposits"])
 
-    vals=[scale(ldr),scale(casa),scale(ibdep),scale(gap),scale(nim)]
+    assets=latest_id(bs,["BS_TOTAL_ASSETS"])
+    interbank_liab=latest_id(bs,[
+        "BS_PLACEMENTS_AND_BORROWINGS_FROM_CREDIT_INSTITUTIONS",
+        "BS_BORROWINGS_FROM_CREDIT_INSTITUTIONS"
+    ])
+    if pd.isna(interbank_liab):
+        interbank_liab=latest_name(bs,["placements and borrowings from credit institutions","borrowings from credit institutions"])
+
+    if pd.isna(ldr) and pd.notna(loans) and pd.notna(deposits) and deposits!=0:
+        ldr=loans/deposits
+    ibdep=interbank_liab/assets if pd.notna(interbank_liab) and pd.notna(assets) and assets!=0 else np.nan
+    gap=(loans-deposits)/deposits if pd.notna(loans) and pd.notna(deposits) and deposits!=0 else np.nan
+
+    vals=[ldr,casa,ibdep,gap,nim]
     coverage=float(pd.Series(vals).notna().mean())
     return [ticker,*vals,coverage,"ACTUAL","BRONZE","OK" if coverage>=.60 else "PARTIAL",now()]
 
@@ -101,7 +114,7 @@ for t in BANKS:
     try:
         rows.append(fetch_bank(t));status.append(["bank:"+t,"OK","",now()])
     except Exception as e:
-        status.append(["bank:"+t,"ERROR",str(e)[:400],now()])
+        status.append(["bank:"+t,"ERROR",str(e)[:500],now()])
     time.sleep(.25)
 
 pd.DataFrame(rows,columns=[
@@ -110,50 +123,58 @@ pd.DataFrame(rows,columns=[
 ]).to_csv(DATA/"bank_actuals_bronze.csv",index=False,encoding="utf-8-sig")
 
 m=Macro()
-def save(df,name):
+
+def save_raw(df,name):
     if df is None or len(df)==0:return False
-    x=df.copy();x["Data Type"]="ACTUAL";x["Source Mode"]="BRONZE";x["Retrieved At"]=now()
+    x=df.copy()
+    x["Data Type"]="ACTUAL";x["Source Mode"]="BRONZE";x["Retrieved At"]=now()
     x.to_csv(DATA/f"{name}_bronze.csv",index=False,encoding="utf-8-sig")
     return True
 
-jobs={
+for name,fn in {
     "omo":lambda:m.currency().omo(start="2018-01-01"),
     "fx":lambda:m.currency().exchange_rate(start="2018-01-01",period="day"),
     "policy_rate":lambda:m.currency().policy_rate(start="2018-01-01"),
-    "funding_rate_proxy":lambda:m.currency().interest_rate(period="day",length=3650),
     "m2":lambda:m.economy().money_supply(period="month",length=180),
     "credit":lambda:m.economy().credit(period="month",length=180),
     "cpi":lambda:m.economy().cpi(period="month",length=180),
     "budget":lambda:m.economy().state_budget(period="month",length=180),
-}
-for name,fn in jobs.items():
-    try:status.append([name,"OK" if save(fn(),name) else "EMPTY","",now()])
-    except Exception as e:status.append([name,"ERROR",str(e)[:400],now()])
+}.items():
+    try: status.append([name,"OK" if save_raw(fn(),name) else "EMPTY","",now()])
+    except Exception as e: status.append([name,"ERROR",str(e)[:500],now()])
     time.sleep(.25)
 
-# True interbank only.
-errs=[];ib_ok=False
-# Probe only signatures documented by the current Unified UI first.
-# Vnstock docs define start/end/period for interbank_rate; length is retained only as a compatibility probe.
-for label,call in [
-    ("currency.interbank_rate()",lambda:m.currency().interbank_rate()),
-    ("currency.interbank_rate(period=day)",lambda:m.currency().interbank_rate(period="day")),
-    ("currency.interbank_rate(start,end,day)",lambda:m.currency().interbank_rate(start="2024-01-01",end=pd.Timestamp.today().strftime("%Y-%m-%d"),period="day")),
-    ("currency.interbank_rate(start,month)",lambda:m.currency().interbank_rate(start="2018-01",period="month")),
-    ("currency.interbank_rate(length) compatibility",lambda:m.currency().interbank_rate(period="day",length=3650)),
-]:
-    try:
-        if save(call(),"interbank"):
-            status.append(["interbank","OK",label,now()]);ib_ok=True;break
-    except Exception as e:errs.append(f"{label}: {str(e)[:180]}")
-if not ib_ok:
-    manual=DATA/"interbank_manual.csv";old=DATA/"interbank_bronze.csv"
-    if old.exists() and old.stat().st_size>100:
-        status.append(["interbank","DEGRADED","Live failed; retained prior Bronze ACTUAL. "+" | ".join(errs),now()])
-    elif manual.exists() and manual.stat().st_size>50:
-        status.append(["interbank","MANUAL_ACTUAL","Using manual/public ACTUAL. "+" | ".join(errs),now()])
+# R6: use the runtime-proven interest_rate() response, filter TRUE interbank group and Overnight.
+try:
+    rates=m.currency().interest_rate(length=3650)
+    rates.to_csv(DATA/"interest_rate_raw_bronze.csv",index=True,encoding="utf-8-sig")
+
+    x=rates.reset_index().copy()
+    # R5 showed columns: report_time(index), time, group_name, name, value, unit, source.
+    group=x["group_name"].astype(str).str.lower() if "group_name" in x.columns else pd.Series("",index=x.index)
+    tenor=x["name"].astype(str).str.lower() if "name" in x.columns else pd.Series("",index=x.index)
+    mask=group.str.contains("liên ngân hàng",regex=False,na=False) & tenor.str.contains("qua đêm",regex=False,na=False)
+    ib=x[mask].copy()
+
+    if len(ib):
+        date_source="time" if "time" in ib.columns else "report_time"
+        ib["date"]=pd.to_datetime(ib[date_source],errors="coerce")
+        ib["overnight_rate"]=pd.to_numeric(ib["value"],errors="coerce")
+        keep=["date","overnight_rate"]
+        for c in ["unit","source","group_name","name","report_time","time"]:
+            if c in ib.columns and c not in keep: keep.append(c)
+        ib=ib[keep].dropna(subset=["date","overnight_rate"]).sort_values("date").drop_duplicates("date",keep="last")
+        ib["Data Type"]="ACTUAL"; ib["Source Mode"]="BRONZE"; ib["Retrieved At"]=now()
+        ib.to_csv(DATA/"interbank_bronze.csv",index=False,encoding="utf-8-sig")
+        status.append(["interbank","OK_INTEREST_RATE_FILTER",f"{len(ib)} overnight observations filtered from interest_rate(); source={ib['source'].iloc[-1] if 'source' in ib.columns else ''}",now()])
     else:
-        status.append(["interbank","ERROR","No true interbank series. "+" | ".join(errs),now()])
+        status.append(["interbank","ERROR","interest_rate() returned data but no matching interbank/Qua đêm rows.",now()])
+except Exception as e:
+    manual=DATA/"interbank_manual.csv"
+    if manual.exists() and manual.stat().st_size>50:
+        status.append(["interbank","MANUAL_ACTUAL",f"Bronze interest_rate filter failed; manual ACTUAL retained. {str(e)[:350]}",now()])
+    else:
+        status.append(["interbank","ERROR",f"interest_rate() failed: {str(e)[:450]}",now()])
 
 pd.DataFrame(status,columns=["dataset","status","message","Retrieved At"]).to_csv(DATA/"refresh_status.csv",index=False,encoding="utf-8-sig")
 print(pd.DataFrame(status,columns=["dataset","status","message","Retrieved At"]))

@@ -41,7 +41,7 @@ def ts(path,label,cands):
     return x.dropna().sort_values("date").drop_duplicates("date",keep="last")
 
 def interbank_series():
-    x=ts(DATA/"interbank_bronze.csv","interbank",["overnight","o/n","on","qua đêm","rate","value"])
+    x=ts(DATA/"interbank_bronze.csv","interbank",["overnight_rate","overnight","qua đêm","o/n","on","rate","value"])
     if len(x):return x,"BRONZE"
     m=load(DATA/"interbank_manual.csv")
     if len(m):
