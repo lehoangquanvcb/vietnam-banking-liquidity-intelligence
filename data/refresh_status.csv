@@ -1,1 +1,29 @@
 ﻿dataset,status,message,Retrieved At
+bank:VCB,OK,,2026-08-18T09:20:35+07:00
+bank:BID,OK,,2026-08-18T09:20:42+07:00
+bank:CTG,OK,,2026-08-18T09:20:48+07:00
+bank:TCB,OK,,2026-08-18T09:20:55+07:00
+bank:MBB,OK,,2026-08-18T09:21:01+07:00
+bank:ACB,OK,,2026-08-18T09:21:07+07:00
+bank:HDB,OK,,2026-08-18T09:21:14+07:00
+bank:VPB,OK,,2026-08-18T09:21:20+07:00
+bank:STB,OK,,2026-08-18T09:21:26+07:00
+bank:VIB,OK,,2026-08-18T09:21:33+07:00
+bank:SHB,OK,,2026-08-18T09:21:39+07:00
+bank:TPB,OK,,2026-08-18T09:21:45+07:00
+bank:LPB,OK,,2026-08-18T09:21:52+07:00
+bank:OCB,OK,,2026-08-18T09:21:59+07:00
+bank:MSB,OK,,2026-08-18T09:22:05+07:00
+bank:SSB,OK,,2026-08-18T09:22:11+07:00
+bank:EIB,OK,,2026-08-18T09:22:19+07:00
+bank:NAB,OK,,2026-08-18T09:22:25+07:00
+bank:KLB,OK,,2026-08-18T09:22:32+07:00
+bank:BAB,OK,,2026-08-18T09:22:39+07:00
+omo,OK,,2026-08-18T09:22:39+07:00
+interbank,ERROR,Failed to fetch data: 404 - Not Found,2026-08-18T09:22:40+07:00
+fx,OK,,2026-08-18T09:22:41+07:00
+policy_rate,OK,,2026-08-18T09:22:41+07:00
+m2,ERROR,time data '2012-01' does not match format '%Y-%m-%d',2026-08-18T09:22:42+07:00
+credit,ERROR,time data '2012-01' does not match format '%Y-%m-%d',2026-08-18T09:22:42+07:00
+cpi,ERROR,time data '2012-01' does not match format '%Y-%m-%d',2026-08-18T09:22:42+07:00
+budget,ERROR,time data '2012-01' does not match format '%Y-%m-%d',2026-08-18T09:22:42+07:00
