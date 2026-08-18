@@ -1,27 +1,22 @@
 name: Refresh Bronze Liquidity Intelligence
-
 on:
   workflow_dispatch:
   schedule:
     - cron: "15 1 * * 1-5"
-
 permissions:
   contents: write
-
 jobs:
   refresh:
     runs-on: [self-hosted]
     steps:
       - uses: actions/checkout@v4
-
-      - name: Refresh Bronze and build models
+      - name: Refresh and model
         shell: powershell
         run: |
-          $py = "$env:USERPROFILE\.venv\Scripts\python.exe"
-          if (-not (Test-Path $py)) { throw "Bronze Python not found: $py" }
+          $py="$env:USERPROFILE\.venv\Scripts\python.exe"
+          if (-not (Test-Path $py)) { throw "Bronze Python not found" }
           & $py scripts/refresh_bronze.py
           & $py scripts/build_models.py
-
       - name: Commit outputs
         shell: powershell
         run: |
@@ -29,6 +24,6 @@ jobs:
           git config user.email "vnstock-liquidity-bot@users.noreply.github.com"
           git add data
           git diff --cached --quiet
-          if ($LASTEXITCODE -eq 0) { Write-Host "No changes"; exit 0 }
-          git commit -m "Automated Bronze data and model refresh"
+          if ($LASTEXITCODE -eq 0) { exit 0 }
+          git commit -m "Automated Bronze refresh and model build"
           git push
