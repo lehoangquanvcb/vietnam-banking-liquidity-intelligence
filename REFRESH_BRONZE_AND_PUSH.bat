@@ -1,2 +1,0 @@
-@echo off
-call "%~dp0REFRESH_BRONZE_BUILD_MODELS_AND_PUSH.bat"

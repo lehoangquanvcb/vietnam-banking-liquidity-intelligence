@@ -4,9 +4,8 @@
   "min_daily_observations": 80,
   "min_markov_observations": 120,
   "z_window": 60,
-  "bank_stress_beta_per_lpi": 0.15,
-  "bank_actual_min_coverage": 0.6,
   "lpi_min_components": 2,
+  "bank_stress_beta_per_lpi": 0.15,
   "amber_threshold": 60,
   "red_threshold": 75,
   "nim_red_threshold": 0.02
