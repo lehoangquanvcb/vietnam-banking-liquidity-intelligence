@@ -1,57 +1,30 @@
 {
-  "generated_at": "2026-08-18T11:28:41.014869+07:00",
   "lpi": {
     "status": "OK",
-    "model": "ARIMA(1,1,0)",
-    "order": [
-      1,
-      1,
-      0
-    ],
-    "nobs": 2162,
-    "test_n": 20,
-    "rmse": 1.453081489081908,
-    "mae": 1.1940974549597179,
-    "naive_rmse": 1.444154796817434,
-    "skill_vs_naive": -0.006181257219895153,
-    "aic": 4760.148661169901,
-    "bic": 4771.504388171257,
-    "candidate_results": [
-      {
-        "model": "ARIMA(1,0,0)",
-        "rmse": 2.3001137172589856,
-        "mae": 1.874939247421338
-      },
-      {
-        "model": "ARIMA(2,0,0)",
-        "rmse": 2.293211934571379,
-        "mae": 1.863430641439907
-      },
-      {
-        "model": "ARIMA(1,1,0)",
-        "rmse": 1.453081489081908,
-        "mae": 1.1940974549597179
-      },
-      {
-        "model": "ARIMA(0,1,1)",
-        "rmse": 1.4621111647515532,
-        "mae": 1.1944030645359152
-      }
-    ]
+    "model": "ARIMA(2,0,0)",
+    "nobs": 1451,
+    "rmse": 0.4056869550046224,
+    "mae": 0.3170609635681231,
+    "naive_rmse": 0.6263507156511506,
+    "skill_vs_naive": 0.35230064424390006,
+    "aic": 2743.720519585613,
+    "bic": 2764.835035354896,
+    "confidence_grade": "HIGH",
+    "governance_note": "ARIMA beat naive holdout RMSE."
   },
   "interbank": {
-    "status": "NO_INTERBANK_DATA"
+    "status": "NO_INTERBANK_DATA",
+    "source": "NONE"
   },
   "regime": {
     "status": "OK",
-    "nobs": 2162,
-    "aic": 4528.716831752301
+    "nobs": 1451,
+    "aic": 2802.996851658365
   },
-  "var": {
-    "status": "INSUFFICIENT_ACTUAL_HISTORY",
-    "nobs": 79,
-    "variables": [
-      "FX"
-    ]
-  }
+  "interbank_source": "NONE",
+  "bank_stress": {
+    "valid_base": 20,
+    "fallback_tickers": 0
+  },
+  "generated_at": "2026-08-18T15:03:26.435160+07:00"
 }
