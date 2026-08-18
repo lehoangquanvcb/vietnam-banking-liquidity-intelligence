@@ -170,14 +170,17 @@ def forecast_select(y,h=20):
     }
 
 def regimes(d):
-    x=d[["date","LPI"]].dropna()
-    if len(x)<CFG["min_markov_observations"]:return pd.DataFrame(),{"status":"INSUFFICIENT_ACTUAL_HISTORY","nobs":len(x)}
+    x=d[["date","LPI"]].dropna().copy()
+    if len(x)<CFG["min_markov_observations"]:
+        return pd.DataFrame(),{"status":"INSUFFICIENT_ACTUAL_HISTORY","nobs":len(x)}
     try:
-        fit=MarkovRegression(x.LPI,k_regimes=3,trend="c",switching_variance=True).fit(disp=False,maxiter=250)
+        dates=pd.to_datetime(x["date"],errors="coerce").reset_index(drop=True)
+        y=pd.Series(pd.to_numeric(x["LPI"],errors="coerce").values,index=pd.RangeIndex(len(x)),dtype=float)
+        fit=MarkovRegression(y,k_regimes=3,trend="c",switching_variance=True).fit(disp=False,maxiter=250)
         p=fit.smoothed_marginal_probabilities
         means=[(k,float(np.average(x.LPI,weights=p[k]))) for k in range(3)]
         order=[k for k,_ in sorted(means,key=lambda z:z[1])]
-        out=pd.DataFrame({"date":x.date.values,"P_Excess_raw":p[order[0]].values,
+        out=pd.DataFrame({"date":dates.values,"P_Excess_raw":p[order[0]].values,
                           "P_Neutral_raw":p[order[1]].values,"P_Stress_raw":p[order[2]].values})
         for s,dst in [("P_Excess_raw","P_Excess"),("P_Neutral_raw","P_Neutral"),("P_Stress_raw","P_Stress")]:
             out[dst]=out[s].rolling(20,min_periods=1).mean()

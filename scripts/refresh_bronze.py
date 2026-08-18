@@ -17,153 +17,216 @@ def now():
     return datetime.now().astimezone().isoformat(timespec="seconds")
 
 def norm(x):
-    s=str(x or "")
+    s=str(x if x is not None else "")
+    # Vietnamese đ/Đ are not decomposed by NFKD; normalize explicitly.
+    s=s.replace("đ","d").replace("Đ","D")
     s=unicodedata.normalize("NFKD",s)
     s="".join(ch for ch in s if not unicodedata.combining(ch))
     s=re.sub(r"[^a-zA-Z0-9]+"," ",s).lower().strip()
     return s
 
+def flatten_frame(df):
+    """Normalize MultiIndex index/columns without calling pd.isna on MultiIndex."""
+    if df is None:
+        return pd.DataFrame()
+    x=df.copy()
+
+    # Move index levels to columns safely.
+    try:
+        if isinstance(x.index,pd.MultiIndex):
+            x=x.reset_index()
+        elif x.index.name is not None and x.index.name not in x.columns:
+            x=x.reset_index()
+    except Exception:
+        # If reset fails, preserve values and use a simple RangeIndex.
+        x=x.copy()
+        x.index=pd.RangeIndex(len(x))
+
+    # Flatten MultiIndex columns by keeping non-empty level labels.
+    if isinstance(x.columns,pd.MultiIndex):
+        cols=[]
+        seen={}
+        for c in x.columns:
+            parts=[str(v).strip() for v in c if str(v).strip() not in {"","None","nan"}]
+            name=" | ".join(parts) if parts else "column"
+            n=seen.get(name,0)
+            seen[name]=n+1
+            cols.append(name if n==0 else f"{name}__{n}")
+        x.columns=cols
+    else:
+        x.columns=[str(c) for c in x.columns]
+    return x
+
 def period_key(v):
     s=str(v)
-    m=re.match(r"(\d{4})[-_/ ]?Q?(\d{1,2})?",s,re.I)
+    m=re.search(r"(\d{4}).*?(?:Q|quarter)?\s*([1-4])?",s,re.I)
     if m:
         return (int(m.group(1)),int(m.group(2) or 0))
     return (0,0)
 
-def long_metric(df, ids=(), names=()):
-    if df is None or len(df)==0:
+def candidate_col(x, names):
+    wanted=[norm(n) for n in names]
+    # Prefer exact final-level matches first; important for MultiIndex-flattened
+    # names such as "meta | name" versus "meta | group_name".
+    for c in x.columns:
+        nc=norm(c)
+        tail=nc.split()[-1] if nc else ""
+        if any(w==nc or w==tail or nc.endswith(" "+w) for w in wanted):
+            return c
+    # Then allow broader contains matching.
+    for c in x.columns:
+        nc=norm(c)
+        if any(w in nc for w in wanted):
+            return c
+    return None
+
+def metric_from_frame(df, ids=(), names=()):
+    x=flatten_frame(df)
+    if x.empty:
         return np.nan
-    x=df.copy()
-    x.columns=[str(c) for c in x.columns]
+
+    idc=candidate_col(x,["id","code","metric_id"])
+    namec=candidate_col(x,["name","metric","indicator","item","label"])
+    vc=candidate_col(x,["value","metric_value","ratio_value"])
+    pc=candidate_col(x,["period","report_period","quarter","year"])
 
     masks=[]
-    if "id" in x.columns:
-        sid=x["id"].astype(str).str.upper()
-        for pat in ids:
-            p=str(pat).upper()
-            masks.append(sid.eq(p) | sid.str.contains(p,regex=False,na=False))
-    if "name" in x.columns:
-        sn=x["name"].astype(str).map(norm)
-        for pat in names:
-            p=norm(pat)
-            masks.append(sn.str.contains(p,regex=False,na=False))
+    if idc:
+        sid=x[idc].astype(str).str.upper()
+        for p in ids:
+            pu=str(p).upper()
+            masks.append(sid.eq(pu) | sid.str.contains(pu,regex=False,na=False))
+    if namec:
+        sn=x[namec].astype(str).map(norm)
+        for p in names:
+            pn=norm(p)
+            masks.append(sn.str.contains(pn,regex=False,na=False))
 
     for m in masks:
-        if not m.any():
+        if not bool(m.any()):
             continue
-        z=x[m].copy()
-        if "period" in z.columns:
-            z["_pk"]=z["period"].map(period_key)
-            z=z.sort_values("_pk")
-        if "value" in z.columns:
-            v=pd.to_numeric(z["value"],errors="coerce").dropna()
-            if len(v):
-                return float(v.iloc[-1])
+        z=x.loc[m].copy()
+        if pc:
+            z["_period_key"]=z[pc].map(period_key)
+            z=z.sort_values("_period_key")
+        if vc:
+            vals=pd.to_numeric(z[vc],errors="coerce").dropna()
+            if len(vals):
+                return float(vals.iloc[-1])
 
-    # Wide / financial_health schema fallback.
+        # Wide financial_health: latest numeric period column in matching row.
+        for _,row in z.iterrows():
+            numeric=[]
+            for c in z.columns:
+                if c in {idc,namec,pc,"_period_key"}:
+                    continue
+                v=pd.to_numeric(pd.Series([row[c]]),errors="coerce").dropna()
+                if len(v):
+                    numeric.append((period_key(c),float(v.iloc[0])))
+            if numeric:
+                numeric.sort(key=lambda q:q[0])
+                return numeric[-1][1]
+
+    # Column-name match fallback.
     for c in x.columns:
         nc=norm(c)
         if any(norm(p) in nc for p in list(ids)+list(names)):
-            v=pd.to_numeric(x[c],errors="coerce").dropna()
-            if len(v):
-                return float(v.iloc[-1])
+            vals=pd.to_numeric(x[c],errors="coerce").dropna()
+            if len(vals):
+                return float(vals.iloc[-1])
 
-    # Row-text fallback for semi-structured outputs.
+    # Row text fallback.
     for _,row in x.iterrows():
-        lead=" | ".join(norm(v) for v in row.values[:min(8,len(row))])
-        if any(norm(p) in lead for p in list(ids)+list(names)):
-            for v0 in reversed(row.values):
+        text=" | ".join(norm(v) for v in row.values[:min(10,len(row))])
+        if any(norm(p) in text for p in list(ids)+list(names)):
+            nums=[]
+            for v0 in row.values:
                 v=pd.to_numeric(pd.Series([v0]),errors="coerce").dropna()
                 if len(v):
-                    return float(v.iloc[0])
+                    nums.append(float(v.iloc[0]))
+            if nums:
+                return nums[-1]
     return np.nan
 
-def safe_call(fn, calls):
-    errors=[]
-    for label,args in calls:
-        try:
-            return fn(**args),label,errors
-        except Exception as e:
-            errors.append(f"{label}: {str(e)[:220]}")
-    raise RuntimeError(" | ".join(errors))
+def try_source(label, fn):
+    try:
+        df=fn()
+        return df,f"{label}:OK"
+    except Exception as e:
+        return pd.DataFrame(),f"{label}:ERROR:{str(e)[:180]}"
 
 def fetch_bank(ticker):
+    # IMPORTANT: each source is isolated. Failure of balance_sheet/ratio must not kill ticker.
     eq=Fundamental().equity(ticker)
 
-    bs,bs_call,_=safe_call(eq.balance_sheet,[
-        ("long Bank",dict(period="quarter",lang="en",format="long",drop_empty=False,com_type="Bank")),
-        ("long auto",dict(period="quarter",lang="en",format="long",drop_empty=False)),
-        ("minimal",dict(period="quarter")),
-    ])
-    ratio,ratio_call,_=safe_call(eq.ratio,[
-        ("long Bank",dict(period="quarter",lang="en",format="long",drop_empty=False,com_type="Bank")),
-        ("long auto",dict(period="quarter",lang="en",format="long",drop_empty=False)),
-        ("minimal",dict(period="quarter")),
-    ])
-    try:
-        health=eq.financial_health(scorecard="bank",lang="en",limit=4)
-        health_call="scorecard=bank"
-    except Exception:
-        try:
-            health=eq.financial_health(com_type="bank",lang="en",limit=4)
-            health_call="com_type=bank"
-        except Exception:
-            health=pd.DataFrame(); health_call="unavailable"
+    health,health_status=try_source("health",
+        lambda:eq.financial_health(scorecard="bank",lang="en",limit=4))
 
-    for name,df in [("balance_sheet",bs),("ratio",ratio),("financial_health",health)]:
+    ratio,ratio_status=try_source("ratio-long-bank",
+        lambda:eq.ratio(period="quarter",lang="en",format="long",com_type="Bank"))
+    if ratio.empty:
+        ratio,ratio_status2=try_source("ratio-default",
+            lambda:eq.ratio(period="quarter"))
+        ratio_status += " | "+ratio_status2
+
+    bs,bs_status=try_source("bs-long-bank",
+        lambda:eq.balance_sheet(period="quarter",lang="en",format="long",com_type="Bank"))
+    if bs.empty:
+        bs,bs_status2=try_source("bs-default",
+            lambda:eq.balance_sheet(period="quarter"))
+        bs_status += " | "+bs_status2
+
+    for name,df in [("financial_health",health),("ratio",ratio),("balance_sheet",bs)]:
         if df is not None and len(df):
-            df.to_csv(RAW/f"{ticker}_{name}.csv",index=False,encoding="utf-8-sig")
+            try:
+                flatten_frame(df).to_csv(RAW/f"{ticker}_{name}.csv",index=False,encoding="utf-8-sig")
+            except Exception:
+                pass
 
-    # Stable IDs from runtime diagnostic + broad name fallback.
-    ldr=long_metric(ratio,
-        ids=["RT_BANK_LDR"],
-        names=["loan to deposit ratio","loans to deposits","ldr"])
-    casa=long_metric(ratio,
-        ids=["RT_BANK_CASA"],
-        names=["casa","current account saving account","current account savings"])
-    nim=long_metric(ratio,
-        ids=["RT_BANK_NIM"],
-        names=["net interest margin","nim"])
+    # Use financial_health FIRST because it is designed for stable bank scorecards.
+    ldr=metric_from_frame(health,["RT_BANK_LDR"],["loan to deposit ratio","ldr"])
+    if pd.isna(ldr):
+        ldr=metric_from_frame(ratio,["RT_BANK_LDR"],["loan to deposit ratio","ldr"])
+
+    casa=metric_from_frame(health,["RT_BANK_CASA"],["casa","current account saving"])
+    if pd.isna(casa):
+        casa=metric_from_frame(ratio,["RT_BANK_CASA"],["casa","current account saving"])
+
+    nim=metric_from_frame(health,["RT_BANK_NIM"],["net interest margin","nim"])
     if pd.isna(nim):
-        nim=long_metric(health,ids=["RT_BANK_NIM"],names=["net interest margin","nim"])
+        nim=metric_from_frame(ratio,["RT_BANK_NIM"],["net interest margin","nim"])
 
-    loans=long_metric(bs,
-        ids=["BS_CUSTOMER_LOANS","BS_LOANS_TO_CUSTOMERS","BS_LOANS_AND_ADVANCES_TO_CUSTOMERS"],
-        names=["loans to customers","customer loans","loans and advances to customers"])
-    deposits=long_metric(bs,
-        ids=["BS_CUSTOMER_DEPOSITS"],
-        names=["customer deposits","deposits from customers"])
-    assets=long_metric(bs,
-        ids=["BS_TOTAL_ASSETS"],
-        names=["total assets"])
-
-    interbank_liab=long_metric(bs,
-        ids=[
-            "BS_PLACEMENTS_AND_BORROWINGS_FROM_CREDIT_INSTITUTIONS",
-            "BS_BORROWINGS_FROM_CREDIT_INSTITUTIONS",
-            "BS_DEPOSITS_AND_BORROWINGS_FROM_CREDIT_INSTITUTIONS"
-        ],
-        names=[
-            "placements and borrowings from credit institutions",
-            "deposits and borrowings from credit institutions",
-            "borrowings from credit institutions",
-            "amounts due to credit institutions"
-        ])
+    loans=metric_from_frame(bs,
+        ["BS_CUSTOMER_LOANS","BS_LOANS_TO_CUSTOMERS","BS_LOANS_AND_ADVANCES_TO_CUSTOMERS"],
+        ["loans to customers","customer loans","loans and advances to customers"])
+    deposits=metric_from_frame(bs,
+        ["BS_CUSTOMER_DEPOSITS"],
+        ["customer deposits","deposits from customers"])
+    assets=metric_from_frame(bs,
+        ["BS_TOTAL_ASSETS"],
+        ["total assets"])
+    interbank_liab=metric_from_frame(bs,
+        ["BS_PLACEMENTS_AND_BORROWINGS_FROM_CREDIT_INSTITUTIONS",
+         "BS_BORROWINGS_FROM_CREDIT_INSTITUTIONS",
+         "BS_DEPOSITS_AND_BORROWINGS_FROM_CREDIT_INSTITUTIONS"],
+        ["placements and borrowings from credit institutions",
+         "deposits and borrowings from credit institutions",
+         "amounts due to credit institutions"])
 
     if pd.isna(ldr) and pd.notna(loans) and pd.notna(deposits) and deposits!=0:
-        ldr=loans/deposits
-
-    ibdep=interbank_liab/assets if pd.notna(interbank_liab) and pd.notna(assets) and assets!=0 else np.nan
-    gap=(loans-deposits)/deposits if pd.notna(loans) and pd.notna(deposits) and deposits!=0 else np.nan
+        ldr=float(loans/deposits)
+    ibdep=float(interbank_liab/assets) if pd.notna(interbank_liab) and pd.notna(assets) and assets!=0 else np.nan
+    gap=float((loans-deposits)/deposits) if pd.notna(loans) and pd.notna(deposits) and deposits!=0 else np.nan
 
     vals=[ldr,casa,ibdep,gap,nim]
-    coverage=float(pd.Series(vals).notna().mean())
-    metric_count=int(pd.Series(vals).notna().sum())
+    actual_count=int(pd.Series(vals,dtype="float64").notna().sum())
+    coverage=actual_count/5
+
     return [
-        ticker,*vals,coverage,metric_count,
+        ticker,*vals,coverage,actual_count,
         "ACTUAL","BRONZE",
         "OK" if coverage>=.60 else "PARTIAL",
-        f"BS={bs_call}; Ratio={ratio_call}; Health={health_call}",
+        f"{health_status} || {ratio_status} || {bs_status}",
         now()
     ]
 
@@ -186,77 +249,100 @@ m=Macro()
 def save_raw(df,name):
     if df is None or len(df)==0:
         return False
-    x=df.copy()
+    x=flatten_frame(df)
     x["Data Type"]="ACTUAL"; x["Source Mode"]="BRONZE"; x["Retrieved At"]=now()
     x.to_csv(DATA/f"{name}_bronze.csv",index=False,encoding="utf-8-sig")
     return True
 
-jobs={
+for name,fn in {
     "omo":lambda:m.currency().omo(start="2018-01-01"),
     "fx":lambda:m.currency().exchange_rate(start="2018-01-01",period="day"),
     "policy_rate":lambda:m.currency().policy_rate(start="2018-01-01"),
     "m2":lambda:m.economy().money_supply(period="month",length=180),
     "credit":lambda:m.economy().credit(period="month",length=180),
     "cpi":lambda:m.economy().cpi(period="month",length=180),
-}
-for name,fn in jobs.items():
+}.items():
     try:
         status.append([name,"OK" if save_raw(fn(),name) else "EMPTY","",now()])
     except Exception as e:
         status.append([name,"ERROR",str(e)[:450],now()])
     time.sleep(.20)
 
-# Budget is non-core. Try once; do not fail pipeline.
 try:
     ok=save_raw(m.economy().state_budget(period="month",length=120),"budget")
     status.append(["budget","OK" if ok else "EMPTY","non-core",now()])
 except Exception as e:
     status.append(["budget","DEGRADED",f"non-core dataset unavailable: {str(e)[:300]}",now()])
 
-# ------------------------------------------------------------------
-# R7 INTERBANK HARDENING:
-# Official docs show interest_rate(period='day', length=365).
-# Avoid 3650-day request that triggered backend 500.
-# ------------------------------------------------------------------
-def extract_interbank_rates(rates):
-    if rates is None or len(rates)==0:
+def find_interbank_on(raw):
+    x=flatten_frame(raw)
+    if x.empty:
         return pd.DataFrame()
 
-    x=rates.reset_index().copy()
-    x.columns=[str(c) for c in x.columns]
+    # Create normalized text across every non-numeric/textual column.
+    text_cols=[]
+    for c in x.columns:
+        if x[c].dtype=="object" or "string" in str(x[c].dtype).lower():
+            text_cols.append(c)
 
-    # Runtime schema observed in R5: group_name / name / value / time / source.
-    if {"group_name","name","value"}.issubset(x.columns):
-        g=x["group_name"].astype(str).map(norm)
-        n=x["name"].astype(str).map(norm)
-        mask=g.str.contains("lai suat binh quan lien ngan hang",regex=False,na=False) | \
-             g.str.contains("lien ngan hang",regex=False,na=False)
-        mask=mask & (
-            n.str.contains("qua dem",regex=False,na=False) |
-            n.str.contains("overnight",regex=False,na=False)
-        )
-        z=x[mask].copy()
-        if len(z):
-            dc="time" if "time" in z.columns else "report_time" if "report_time" in z.columns else "date"
-            z["date"]=pd.to_datetime(z[dc],errors="coerce")
-            z["overnight_rate"]=pd.to_numeric(z["value"],errors="coerce")
-            keep=["date","overnight_rate"]
-            for c in ["unit","source","group_name","name","time","report_time"]:
-                if c in z.columns and c not in keep:
-                    keep.append(c)
-            return z[keep].dropna(subset=["date","overnight_rate"]).sort_values("date").drop_duplicates("date",keep="last")
+    if text_cols:
+        row_text=x[text_cols].fillna("").astype(str).agg(" | ".join,axis=1).map(norm)
+    else:
+        row_text=pd.Series("",index=x.index)
 
-    # Official long-format alternative: date / rate_type / rate_value.
-    if {"rate_type","rate_value"}.issubset(x.columns):
-        rt=x["rate_type"].astype(str).map(norm)
-        mask=rt.str.contains("overnight",regex=False,na=False) | rt.str.contains("qua dem",regex=False,na=False)
-        z=x[mask].copy()
-        dc="date" if "date" in z.columns else "time"
-        z["date"]=pd.to_datetime(z[dc],errors="coerce")
-        z["overnight_rate"]=pd.to_numeric(z["rate_value"],errors="coerce")
-        return z[["date","overnight_rate"]].dropna().sort_values("date").drop_duplicates("date",keep="last")
+    interbank_mask=row_text.str.contains("lien ngan hang",regex=False,na=False) | \
+                   row_text.str.contains("interbank",regex=False,na=False)
+    on_mask=row_text.str.contains("qua dem",regex=False,na=False) | \
+            row_text.str.contains("overnight",regex=False,na=False)
+    z=x[interbank_mask & on_mask].copy()
 
-    return pd.DataFrame()
+    # If group label is absent but tenor is explicit, accept Overnight rows only if source/table is the
+    # interest-rate table and at least one other row contains interbank wording.
+    if z.empty and bool(interbank_mask.any()) and bool(on_mask.any()):
+        z=x[on_mask].copy()
+
+    if z.empty:
+        return pd.DataFrame()
+
+    # Identify datetime column.
+    dc=None
+    for cand in ["time","date","report_time","datetime","period"]:
+        c=candidate_col(z,[cand])
+        if c:
+            parsed=pd.to_datetime(z[c],errors="coerce")
+            if parsed.notna().sum()>0:
+                dc=c;break
+    if dc is None:
+        # Try every column.
+        for c in z.columns:
+            parsed=pd.to_datetime(z[c],errors="coerce")
+            if parsed.notna().sum()>=max(2,len(z)//3):
+                dc=c;break
+
+    # Identify value/rate column.
+    vc=candidate_col(z,["value","rate_value","overnight_rate","rate"])
+    if vc is None:
+        best=None;count=0
+        for c in z.columns:
+            vals=pd.to_numeric(z[c],errors="coerce")
+            n=vals.notna().sum()
+            if n>count:
+                best,count=c,n
+        vc=best
+
+    if dc is None or vc is None:
+        return pd.DataFrame()
+
+    out=pd.DataFrame({
+        "date":pd.to_datetime(z[dc],errors="coerce"),
+        "overnight_rate":pd.to_numeric(z[vc],errors="coerce")
+    })
+    # Keep useful lineage fields.
+    for cand in ["source","unit","group_name","name","rate_type"]:
+        c=candidate_col(z,[cand])
+        if c and c not in out.columns:
+            out[cand]=z[c].values
+    return out.dropna(subset=["date","overnight_rate"]).sort_values("date").drop_duplicates("date",keep="last")
 
 rate_calls=[
     ("day_length_365",dict(period="day",length=365)),
@@ -266,32 +352,30 @@ rate_calls=[
     ("day_length_90",dict(period="day",length=90)),
     ("length_90",dict(length=90)),
 ]
-ib=None; raw_rates=None; errors=[]
+ib=None;raw_success=None;used_call=None;errors=[]
+
 for label,args in rate_calls:
     try:
         raw=m.currency().interest_rate(**args)
-        candidate=extract_interbank_rates(raw)
+        candidate=find_interbank_on(raw)
         if len(candidate):
-            ib=candidate; raw_rates=raw; used_call=label
+            ib=candidate;raw_success=raw;used_call=label
             break
-        errors.append(f"{label}: returned {0 if raw is None else len(raw)} rows but no ON match")
+        schema=flatten_frame(raw)
+        errors.append(f"{label}: returned {len(schema)} rows; cols={list(schema.columns)[:12]}; no ON match")
     except Exception as e:
         errors.append(f"{label}: {str(e)[:220]}")
 
 if ib is not None and len(ib):
-    raw_rates.to_csv(DATA/"interest_rate_raw_bronze.csv",index=True,encoding="utf-8-sig")
-    ib["Data Type"]="ACTUAL"; ib["Source Mode"]="BRONZE"; ib["Retrieved At"]=now()
+    flatten_frame(raw_success).to_csv(DATA/"interest_rate_raw_bronze.csv",index=False,encoding="utf-8-sig")
+    ib["Data Type"]="ACTUAL";ib["Source Mode"]="BRONZE";ib["Retrieved At"]=now()
     ib.to_csv(DATA/"interbank_bronze.csv",index=False,encoding="utf-8-sig")
-    status.append([
-        "interbank","OK_INTEREST_RATE_FILTER",
-        f"call={used_call}; observations={len(ib)}; latest={ib['date'].max()}",
-        now()
-    ])
+    status.append(["interbank","OK_INTEREST_RATE_FILTER",
+                   f"call={used_call}; observations={len(ib)}; latest={ib['date'].max()}",now()])
 else:
-    manual=DATA/"interbank_manual.csv"
-    old=DATA/"interbank_bronze.csv"
+    old=DATA/"interbank_bronze.csv";manual=DATA/"interbank_manual.csv"
     if old.exists() and old.stat().st_size>100:
-        status.append(["interbank","DEGRADED","New refresh failed; retained prior ACTUAL interbank file. "+" | ".join(errors),now()])
+        status.append(["interbank","DEGRADED","Refresh failed; retained prior ACTUAL. "+" | ".join(errors),now()])
     elif manual.exists() and manual.stat().st_size>50:
         status.append(["interbank","MANUAL_ACTUAL","Using manual/public ACTUAL. "+" | ".join(errors),now()])
     else:

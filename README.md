@@ -1,57 +1,26 @@
-# Vietnam Banking Liquidity Intelligence — R7 Data Pipeline Hardening
+# Vietnam Banking Liquidity Intelligence — R8 MultiIndex-Safe Data Fix
 
-## Kiến trúc giữ nguyên
-Persistent PC/self-hosted runner → `vnstock_data` Bronze → ACTUAL CSV → governed model outputs → GitHub → Streamlit Cloud.
+R8 targets the exact errors observed in R7:
 
-Streamlit Cloud chỉ đọc repository; không gọi Vnstock Sponsor.
+## 1. Bank Fundamental `isna is not defined for MultiIndex`
+- `financial_health(scorecard="bank")` is now the primary bank-metric source.
+- balance_sheet and ratio are isolated: one source failing cannot fail the whole ticker.
+- All returned DataFrames are normalized through a MultiIndex-safe flattener.
+- `drop_empty=False` was removed from production calls to avoid triggering problematic internal transformations.
+- Bank stress remains field-level BRONZE / HYBRID / FALLBACK.
 
-## R7 sửa 3 vấn đề của R6
+## 2. Interbank returned rows but parser found no ON
+- R8 flattens MultiIndex index and columns before parsing.
+- It scans text across all columns for `liên ngân hàng/interbank` + `Qua đêm/overnight`.
+- It detects date and numeric rate columns dynamically.
+- Request ladder remains 365 → 180 → 90 days.
+- Deposit/lending rates are never renamed as ON.
 
-### 1. Interbank backend 500
-R6 gọi `interest_rate(length=3650)` và backend trả HTTP 500.
+## 3. Statsmodels warning
+- SARIMAX already uses RangeIndex.
+- R8 also gives MarkovRegression a clean RangeIndex, eliminating the remaining unsupported-index warning.
 
-R7 không gọi lịch sử quá dài. Nó thử:
-1. `period="day", length=365`
-2. `length=365`
-3. 180 ngày
-4. 90 ngày
+## Architecture
+Local/self-hosted Vnstock Bronze → ACTUAL CSV/model outputs → GitHub → Streamlit read-only.
 
-Dừng ngay khi lấy được true interbank Overnight.
-
-Điều này bám theo ví dụ chính thức Vnstock 3.2.8 dùng `interest_rate(period="day", length=365)`.
-
-### 2. Bank parser và HYBRID field-level fallback
-R6 bỏ toàn bộ dòng ngân hàng xuống FALLBACK nếu chưa đạt 3/5 metrics.
-
-R7 thay bằng field-level fallback:
-- Metric nào Bronze có → giữ ACTUAL.
-- Metric nào Bronze thiếu → chỉ bù đúng metric đó bằng assumption.
-- 5/5 actual → `BRONZE`
-- 1–4/5 actual → `HYBRID`
-- 0/5 actual → `FALLBACK`
-
-Nhờ vậy LDR/CASA/NIM lấy được từ Bronze không còn bị vứt bỏ chỉ vì một metric khác thiếu.
-
-Parser dùng tidy-data Semantic IDs và name aliases:
-- `RT_BANK_LDR`
-- `RT_BANK_CASA`
-- `RT_BANK_NIM`
-- customer loans/deposits
-- total assets
-- borrowings/deposits from credit institutions
-
-### 3. Statsmodels index warnings
-R7 chuẩn hóa dữ liệu forecast thành `RangeIndex` trước khi fit SARIMAX.
-Output forecast vẫn được gắn business-date sau khi dự báo.
-Mục tiêu: hết cảnh báo `unsupported index`.
-
-## Forecast governance
-ARIMA chỉ được dùng nếu RMSE holdout thấp hơn naive.
-Nếu không, production dùng `NAIVE_RANDOM_WALK`, Confidence=LOW.
-
-## Upgrade safety
-Package R7 là CODE ONLY và không chứa `data/`.
-GIỮ nguyên data/ hiện tại khi copy code mới.
-
-Sau đó chạy:
-`REFRESH_BRONZE_BUILD_MODELS_AND_PUSH.bat`
+This package is CODE ONLY. Keep the existing `data/` folder.

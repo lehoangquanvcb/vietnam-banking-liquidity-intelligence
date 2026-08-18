@@ -129,7 +129,7 @@ with st.sidebar:
     full=int((coverage>=.60).sum()) if len(coverage) else 0
     any_actual=int((coverage>0).sum()) if len(coverage) else 0
     st.write(f"Bronze coverage ≥60%: **{full}**")
-    st.write(f"Có ít nhất 1 metric Bronze: **{any_actual}**")
+    st.write(f"Có ≥1 metric Bronze: **{any_actual}**")
     st.write(f"LPI model: **{summary.get('lpi',{}).get('status','NO_MODEL')}**")
     st.write(f"Interbank model: **{summary.get('interbank',{}).get('status','NO_MODEL')}**")
     st.write(f"Interbank source: **{summary.get('interbank_source','NONE')}**")
