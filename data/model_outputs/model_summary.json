@@ -1,14 +1,14 @@
 {
   "lpi": {
     "status": "OK",
-    "model": "ARIMA(2,0,0)",
-    "nobs": 1451,
-    "rmse": 0.4056869550046224,
-    "mae": 0.3170609635681231,
-    "naive_rmse": 0.6263507156511506,
-    "skill_vs_naive": 0.35230064424390006,
-    "aic": 2743.720519585613,
-    "bic": 2764.835035354896,
+    "model": "ARIMA(0,1,1)",
+    "nobs": 1452,
+    "rmse": 0.40370702413517445,
+    "mae": 0.3218524418202994,
+    "naive_rmse": 0.5085211057903775,
+    "skill_vs_naive": 0.20611549936023588,
+    "aic": 2931.170154402431,
+    "bic": 2941.727412287072,
     "confidence_grade": "HIGH",
     "governance_note": "ARIMA beat naive holdout RMSE."
   },
@@ -18,13 +18,13 @@
   },
   "regime": {
     "status": "OK",
-    "nobs": 1451,
-    "aic": 2802.996851658365
+    "nobs": 1452,
+    "aic": 2806.1927658350983
   },
   "interbank_source": "NONE",
   "bank_stress": {
     "valid_base": 20,
-    "fallback_tickers": 0
+    "fallback_tickers": 20
   },
-  "generated_at": "2026-08-18T15:03:26.435160+07:00"
+  "generated_at": "2026-08-18T15:39:17.242873+07:00"
 }

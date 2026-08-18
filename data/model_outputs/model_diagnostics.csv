@@ -1,4 +1,4 @@
 ﻿Target,Status,Model,Observations,RMSE,Naive RMSE,Skill vs Naive,Confidence,Governance Note
-LPI,OK,"ARIMA(2,0,0)",1451.0,0.4056869550046224,0.6263507156511506,0.35230064424390006,HIGH,ARIMA beat naive holdout RMSE.
+LPI,OK,"ARIMA(0,1,1)",1452.0,0.40370702413517445,0.5085211057903775,0.20611549936023588,HIGH,ARIMA beat naive holdout RMSE.
 Interbank ON,NO_INTERBANK_DATA,,,,,,,
-Liquidity Regime,OK,,1451.0,,,,,
+Liquidity Regime,OK,,1452.0,,,,,

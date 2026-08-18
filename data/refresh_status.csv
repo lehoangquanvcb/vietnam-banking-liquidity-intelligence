@@ -1,30 +1,29 @@
 ﻿dataset,status,message,Retrieved At
-bank:VCB,OK,,2026-08-18T14:56:48+07:00
-bank:BID,OK,,2026-08-18T14:57:08+07:00
-bank:CTG,OK,,2026-08-18T14:57:28+07:00
-bank:TCB,OK,,2026-08-18T14:57:47+07:00
-bank:MBB,OK,,2026-08-18T14:58:08+07:00
-bank:ACB,OK,,2026-08-18T14:58:29+07:00
-bank:HDB,OK,,2026-08-18T14:58:50+07:00
-bank:VPB,OK,,2026-08-18T14:59:11+07:00
-bank:STB,OK,,2026-08-18T14:59:30+07:00
-bank:VIB,OK,,2026-08-18T14:59:50+07:00
-bank:SHB,OK,,2026-08-18T15:00:14+07:00
-bank:TPB,OK,,2026-08-18T15:00:35+07:00
-bank:LPB,OK,,2026-08-18T15:00:55+07:00
-bank:OCB,OK,,2026-08-18T15:01:14+07:00
-bank:MSB,OK,,2026-08-18T15:01:33+07:00
-bank:SSB,OK,,2026-08-18T15:01:51+07:00
-bank:EIB,OK,,2026-08-18T15:02:11+07:00
-bank:NAB,OK,,2026-08-18T15:02:30+07:00
-bank:KLB,OK,,2026-08-18T15:02:50+07:00
-bank:BAB,OK,,2026-08-18T15:03:09+07:00
-omo,OK,,2026-08-18T15:03:10+07:00
-fx,OK,,2026-08-18T15:03:10+07:00
-policy_rate,OK,,2026-08-18T15:03:11+07:00
-funding_rate_proxy,ERROR,API request failed: Expecting value: line 1 column 2 (char 1),2026-08-18T15:03:14+07:00
-m2,EMPTY,,2026-08-18T15:03:15+07:00
-credit,EMPTY,,2026-08-18T15:03:15+07:00
-cpi,EMPTY,,2026-08-18T15:03:16+07:00
-budget,ERROR,Failed to fetch data: 404 - Not Found,2026-08-18T15:03:16+07:00
-interbank,ERROR,"No true interbank series. currency.interbank_rate(): Failed to fetch data: 404 - Not Found | currency.interbank_rate(period=day): Failed to fetch data: 404 - Not Found | currency.interbank_rate(start,end,day): Failed to fetch data: 404 - Not Found | currency.interbank_rate(start,month): time data '2018-01' does not match format '%Y-%m-%d' | currency.interbank_rate(length) compatibility: Failed to fetch data: 404 - Not Found",2026-08-18T15:03:18+07:00
+bank:VCB,OK,,2026-08-18T15:31:43+07:00
+bank:BID,OK,,2026-08-18T15:32:06+07:00
+bank:CTG,OK,,2026-08-18T15:32:30+07:00
+bank:TCB,OK,,2026-08-18T15:32:55+07:00
+bank:MBB,OK,,2026-08-18T15:33:18+07:00
+bank:ACB,OK,,2026-08-18T15:33:41+07:00
+bank:HDB,OK,,2026-08-18T15:34:03+07:00
+bank:VPB,OK,,2026-08-18T15:34:26+07:00
+bank:STB,OK,,2026-08-18T15:34:48+07:00
+bank:VIB,OK,,2026-08-18T15:35:11+07:00
+bank:SHB,OK,,2026-08-18T15:35:34+07:00
+bank:TPB,OK,,2026-08-18T15:35:55+07:00
+bank:LPB,OK,,2026-08-18T15:36:18+07:00
+bank:OCB,OK,,2026-08-18T15:36:39+07:00
+bank:MSB,OK,,2026-08-18T15:37:03+07:00
+bank:SSB,OK,,2026-08-18T15:37:26+07:00
+bank:EIB,OK,,2026-08-18T15:37:47+07:00
+bank:NAB,OK,,2026-08-18T15:38:10+07:00
+bank:KLB,OK,,2026-08-18T15:38:36+07:00
+bank:BAB,OK,,2026-08-18T15:39:01+07:00
+omo,OK,,2026-08-18T15:39:02+07:00
+fx,OK,,2026-08-18T15:39:02+07:00
+policy_rate,OK,,2026-08-18T15:39:03+07:00
+m2,EMPTY,,2026-08-18T15:39:04+07:00
+credit,EMPTY,,2026-08-18T15:39:04+07:00
+cpi,EMPTY,,2026-08-18T15:39:05+07:00
+budget,ERROR,Failed to fetch data: 404 - Not Found,2026-08-18T15:39:05+07:00
+interbank,ERROR,interest_rate() failed: API request failed: Expecting value: line 1 column 2 (char 1),2026-08-18T15:39:08+07:00
