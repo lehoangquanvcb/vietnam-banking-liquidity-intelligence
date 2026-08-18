@@ -34,3 +34,11 @@ git push origin main
 ```
 Sau đó chạy:
 `REFRESH_BRONZE_BUILD_MODELS_AND_PUSH.bat`
+
+
+## R4 – Data Acquisition Fix
+- Uses current Vnstock Unified UI banking scorecard: `scorecard="banking"`.
+- Expands bank metric aliases for LDR/CASA/NIM/customer loans/customer deposits/interbank assets.
+- Probes documented `Macro().currency().interbank_rate()` signatures before compatibility calls.
+- Never relabels deposit/lending rates as true interbank.
+- Preserves local Bronze → CSV/model outputs → GitHub → Streamlit read-only architecture.

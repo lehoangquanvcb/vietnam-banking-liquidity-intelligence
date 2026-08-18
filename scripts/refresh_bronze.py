@@ -70,7 +70,7 @@ def fetch_bank(ticker):
         except Exception:
             try:calls.append(("ratio",eq.ratio(period="quarter")))
             except Exception:calls.append(("ratio",pd.DataFrame()))
-    try:calls.append(("financial_health",eq.financial_health(scorecard="bank",lang="en",limit=4)))
+    try:calls.append(("financial_health",eq.financial_health(scorecard="banking",lang="en",limit=8)))
     except Exception:calls.append(("financial_health",pd.DataFrame()))
 
     tables={k:v for k,v in calls}
@@ -79,14 +79,14 @@ def fetch_bank(ticker):
             df.to_csv(RAW/f"{ticker}_{name}.csv",index=False,encoding="utf-8-sig")
 
     bs=tables["balance_sheet"]; ratio=tables["ratio"]; health=tables["financial_health"]
-    ldr=find_metric(health,["ldr","loan to deposit"]) or find_metric(ratio,["ldr","loan to deposit"])
-    casa=find_metric(health,["casa","current account saving"]) or find_metric(ratio,["casa","current account saving"])
-    nim=find_metric(health,["nim","net interest margin"]) or find_metric(ratio,["nim","net interest margin"])
+    ldr=find_metric(health,["ldr","loan to deposit","loans/deposits","customer loan/customer deposit"]) or find_metric(ratio,["ldr","loan to deposit","loans/deposits"])
+    casa=find_metric(health,["casa","current account saving","current account savings account","demand deposit"]) or find_metric(ratio,["casa","current account saving","demand deposit"])
+    nim=find_metric(health,["nim","net interest margin","interest margin"]) or find_metric(ratio,["nim","net interest margin","interest margin"])
 
-    loans=find_metric(bs,["customer loans","loans to customers","cho vay khách hàng"])
-    deposits=find_metric(bs,["customer deposits","deposits from customers","tiền gửi khách hàng"])
+    loans=find_metric(bs,["customer loans","loans to customers","customer loan","cho vay khách hàng","loans and advances to customers"])
+    deposits=find_metric(bs,["customer deposits","deposits from customers","customer deposit","tiền gửi khách hàng","deposits of customers"])
     assets=find_metric(bs,["total assets","tổng tài sản"])
-    ib=find_metric(bs,["interbank","credit institutions","tổ chức tín dụng"])
+    ib=find_metric(bs,["interbank","due from credit institutions","deposits at credit institutions","credit institutions","tổ chức tín dụng"])
 
     if (ldr is None or pd.isna(ldr)) and loans is not None and deposits not in (None,0):ldr=loans/deposits
     ibdep=ib/assets if ib is not None and assets not in (None,0) else np.nan
@@ -133,9 +133,14 @@ for name,fn in jobs.items():
 
 # True interbank only.
 errs=[];ib_ok=False
+# Probe only signatures documented by the current Unified UI first.
+# Vnstock docs define start/end/period for interbank_rate; length is retained only as a compatibility probe.
 for label,call in [
-    ("currency.interbank_rate(length)",lambda:m.currency().interbank_rate(period="day",length=3650)),
-    ("currency.interbank_rate(start)",lambda:m.currency().interbank_rate(start="2018-01-01",period="day")),
+    ("currency.interbank_rate()",lambda:m.currency().interbank_rate()),
+    ("currency.interbank_rate(period=day)",lambda:m.currency().interbank_rate(period="day")),
+    ("currency.interbank_rate(start,end,day)",lambda:m.currency().interbank_rate(start="2024-01-01",end=pd.Timestamp.today().strftime("%Y-%m-%d"),period="day")),
+    ("currency.interbank_rate(start,month)",lambda:m.currency().interbank_rate(start="2018-01",period="month")),
+    ("currency.interbank_rate(length) compatibility",lambda:m.currency().interbank_rate(period="day",length=3650)),
 ]:
     try:
         if save(call(),"interbank"):
