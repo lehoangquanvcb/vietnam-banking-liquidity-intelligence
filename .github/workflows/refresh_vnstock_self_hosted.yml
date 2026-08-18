@@ -1,0 +1,38 @@
+name: Refresh Vnstock Bronze Data
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "15 1 * * 1-5"
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    # IMPORTANT: register YOUR persistent PC/server as a GitHub self-hosted runner.
+    # Do not change to ubuntu-latest for Bronze unless you understand Vnstock device limits.
+    runs-on: [self-hosted]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Refresh Bronze data
+        shell: powershell
+        run: |
+          python scripts/refresh_bronze.py
+
+      - name: Commit refreshed data
+        shell: powershell
+        run: |
+          git config user.name "vnstock-data-bot"
+          git config user.email "vnstock-data-bot@users.noreply.github.com"
+          git add data
+          git diff --cached --quiet
+          if ($LASTEXITCODE -eq 0) {
+            Write-Host "No data changes"
+            exit 0
+          }
+          git commit -m "Automated Bronze data refresh"
+          git push
