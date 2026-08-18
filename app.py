@@ -15,11 +15,12 @@ st.set_page_config(page_title="Vietnam Banking Liquidity Intelligence",layout="w
 
 st.markdown("""
 <style>
-.block-container{padding-top:1rem;padding-bottom:2rem}
+.block-container{padding-top:2.4rem;padding-bottom:2.5rem}
 [data-testid="stMetricValue"]{font-size:1.45rem}
-h1{font-size:1.9rem!important}
+h1{font-size:clamp(1.55rem,2.3vw,2.15rem)!important;line-height:1.28!important;margin-top:.35rem!important;padding-top:.25rem!important}
 h2{font-size:1.35rem!important}
 .smallnote{font-size:.88rem;color:#888}
+div[data-testid="stTabs"] button{white-space:nowrap}
 </style>
 """,unsafe_allow_html=True)
 
@@ -47,20 +48,35 @@ def state_badge(state):
     mapping={"Căng thẳng cao":"🔴","Căng thẳng vừa":"🟠","Trung tính":"🟢","Dư thừa thanh khoản":"🔵","Không đủ dữ liệu":"⚪"}
     return f"{mapping.get(state,'⚪')} {state}"
 
-def fan_chart(history,forecast,hist_col,title,ytitle):
+def fan_chart(history,forecast,hist_col,title,ytitle,is_lpi=False):
     fig=go.Figure()
     if len(history):
-        h=history.dropna(subset=["date",hist_col]).tail(180)
-        fig.add_trace(go.Scatter(x=pd.to_datetime(h["date"]),y=h[hist_col],mode="lines",name="Actual"))
+        h=history.dropna(subset=["date",hist_col]).copy()
+        h["date"]=pd.to_datetime(h["date"])
+        # Forecast view should prioritize the recent decision horizon, not the whole multi-year history.
+        cutoff=h["date"].max()-pd.Timedelta(days=365)
+        h=h[h["date"]>=cutoff]
+        fig.add_trace(go.Scatter(x=h["date"],y=h[hist_col],mode="lines",name="Actual",line=dict(width=2)))
+    if is_lpi:
+        # Economic reading bands.
+        fig.add_hrect(y0=-5,y1=-1,opacity=.06,line_width=0,annotation_text="Dư thừa")
+        fig.add_hrect(y0=-1,y1=1,opacity=.03,line_width=0,annotation_text="Trung tính")
+        fig.add_hrect(y0=1,y1=2,opacity=.05,line_width=0,annotation_text="Căng vừa")
+        fig.add_hrect(y0=2,y1=8,opacity=.07,line_width=0,annotation_text="Căng cao")
+        for y in [-1,1,2]:
+            fig.add_hline(y=y,line_dash="dot",opacity=.45)
     if len(forecast):
         f=forecast.copy()
         f["date"]=pd.to_datetime(f["date"])
         fig.add_trace(go.Scatter(x=f["date"],y=f["p975"],line=dict(width=0),showlegend=False,hoverinfo="skip"))
-        fig.add_trace(go.Scatter(x=f["date"],y=f["p025"],fill="tonexty",line=dict(width=0),name="95% CI",opacity=.15))
+        fig.add_trace(go.Scatter(x=f["date"],y=f["p025"],fill="tonexty",line=dict(width=0),name="95% CI",opacity=.12))
         fig.add_trace(go.Scatter(x=f["date"],y=f["p90"],line=dict(width=0),showlegend=False,hoverinfo="skip"))
-        fig.add_trace(go.Scatter(x=f["date"],y=f["p10"],fill="tonexty",line=dict(width=0),name="80% CI",opacity=.25))
-        fig.add_trace(go.Scatter(x=f["date"],y=f["forecast"],mode="lines+markers",name="Forecast"))
-    fig.update_layout(title=title,yaxis_title=ytitle,xaxis_title="",height=420,legend_orientation="h",margin=dict(l=20,r=20,t=50,b=20))
+        fig.add_trace(go.Scatter(x=f["date"],y=f["p10"],fill="tonexty",line=dict(width=0),name="80% CI",opacity=.22))
+        fig.add_trace(go.Scatter(x=f["date"],y=f["forecast"],mode="lines+markers",name="Forecast",line=dict(width=3,dash="dash")))
+    fig.update_layout(
+        title=title,yaxis_title=ytitle,xaxis_title="",height=430,legend_orientation="h",
+        hovermode="x unified",margin=dict(l=20,r=20,t=55,b=20)
+    )
     return fig
 
 daily=load_csv(OUT/"daily_liquidity_panel.csv")
@@ -124,8 +140,9 @@ with tabs[0]:
                 f"1 tháng: **{explain.get('forecast_20d_state','N/A')}**.")
 
     if len(daily) and len(lpi_fc):
-        st.plotly_chart(fan_chart(daily,lpi_fc,"LPI","Liquidity Pressure Index — Actual & Forecast","LPI (z-score composite)"),
+        st.plotly_chart(fan_chart(daily,lpi_fc,"LPI","LPI — 12 tháng gần nhất & dự báo 20 ngày","LPI (z-score)",is_lpi=True),
                         use_container_width=True)
+        st.caption("Ngưỡng đọc nhanh: <−1 dư thừa | −1 đến 1 trung tính | 1–2 căng vừa | >2 căng cao. Vùng xanh/đỏ là dải bất định 80%/95%, không phải kịch bản chắc chắn.")
 
     col1,col2=st.columns([1.2,1])
     with col1:
@@ -166,21 +183,34 @@ Giá trị dương cao hơn = thanh khoản căng hơn; giá trị âm = thanh k
         if cols:
             temp=daily[["date"]+cols].copy()
             temp["date"]=pd.to_datetime(temp["date"])
+            cutoff=temp["date"].max()-pd.Timedelta(days=540)
+            temp=temp[temp["date"]>=cutoff]
             fig=go.Figure()
+            labels={"ON_z":"ON/Interbank","FX_z":"FX pressure","OMO_z":"OMO pressure","LPI":"LPI"}
             for c in cols:
-                fig.add_trace(go.Scatter(x=temp["date"],y=temp[c],mode="lines",name=c))
-            fig.update_layout(height=430,title="LPI và các thành phần chuẩn hóa",legend_orientation="h")
+                width=3 if c=="LPI" else 1.35
+                opacity=1 if c=="LPI" else .65
+                fig.add_trace(go.Scatter(x=temp["date"],y=temp[c],mode="lines",name=labels.get(c,c),
+                                         line=dict(width=width),opacity=opacity))
+            fig.add_hline(y=0,line_dash="dot",opacity=.4)
+            fig.update_layout(height=430,title="LPI và drivers — 18 tháng gần nhất",legend_orientation="h",hovermode="x unified")
             st.plotly_chart(fig,use_container_width=True)
+            st.caption("ON/Interbank tăng → tăng stress; FX tăng nhanh → tăng stress; OMO bơm ròng → giảm stress. LPI là đường tổng hợp đậm.")
 
     if len(regime):
         st.subheader("Xác suất chế độ thanh khoản")
         r=regime.copy();r["date"]=pd.to_datetime(r["date"])
+        r=r[r["date"]>=r["date"].max()-pd.Timedelta(days=730)]
         fig=go.Figure()
+        names={"P_Excess":"Dư thừa","P_Neutral":"Trung tính","P_Stress":"Căng thẳng"}
         for c in ["P_Excess","P_Neutral","P_Stress"]:
-            if c in r:fig.add_trace(go.Scatter(x=r["date"],y=r[c],stackgroup="one",name=c))
-        fig.update_layout(height=350,yaxis_tickformat=".0%",title="Markov-switching regime probabilities")
+            if c in r:
+                fig.add_trace(go.Scatter(x=r["date"],y=r[c],mode="lines",name=names[c],line=dict(width=2)))
+        fig.update_layout(height=350,yaxis_tickformat=".0%",yaxis_range=[0,1],
+                          title="Markov regime probabilities — xác suất làm mượt 20 ngày",
+                          hovermode="x unified",legend_orientation="h")
         st.plotly_chart(fig,use_container_width=True)
-        st.caption("Mô hình Markov Switching cho phép trạng thái thanh khoản chuyển đổi theo xác suất thay vì ép hệ thống vào một ngưỡng cố định.")
+        st.caption("Xác suất đã được làm mượt 20 ngày để nhìn xu hướng chế độ, thay vì các chuyển trạng thái nhiễu theo từng ngày.")
 
     if len(var_fc):
         st.subheader("Triển vọng trung hạn 1–3 tháng")
@@ -189,56 +219,90 @@ Giá trị dương cao hơn = thanh khoản căng hơn; giá trị âm = thanh k
 
 with tabs[2]:
     st.subheader("Dự báo lãi suất liên ngân hàng")
-    if len(daily) and "interbank_bronze" in daily.columns and len(ib_fc):
-        st.plotly_chart(fan_chart(daily,ib_fc,"interbank_bronze","Lãi suất ON — Actual & Forecast","Lãi suất"),
-                        use_container_width=True)
-        d=summary.get("interbank",{})
-        st.markdown(f"""
-**Mô hình:** {d.get('model','N/A')}  
-**Số quan sát:** {d.get('nobs','N/A')}  
-**RMSE backtest:** {d.get('rmse','N/A')}  
-**RMSE naive:** {d.get('naive_rmse','N/A')}  
-
-Mô hình được lựa chọn theo sai số dự báo ngoài mẫu. Nếu `Skill vs Naive > 0`, mô hình tạo thêm giá trị so với việc đơn giản giữ nguyên lãi suất cuối kỳ.
-""")
+    has_ib=len(daily) and "interbank_bronze" in daily.columns and pd.to_numeric(daily["interbank_bronze"],errors="coerce").notna().any()
+    if has_ib:
+        if len(ib_fc):
+            st.plotly_chart(fan_chart(daily,ib_fc,"interbank_bronze","Lãi suất liên ngân hàng — Actual & Forecast","%/năm"),
+                            use_container_width=True)
+            d=summary.get("interbank",{})
+            c1,c2,c3,c4=st.columns(4)
+            c1.metric("Model",d.get("model","N/A"))
+            c2.metric("Quan sát",d.get("nobs","N/A"))
+            c3.metric("RMSE",f"{d.get('rmse'):.3f}" if isinstance(d.get("rmse"),(int,float)) else "N/A")
+            c4.metric("Skill vs Naive",f"{d.get('skill_vs_naive'):.1%}" if isinstance(d.get("skill_vs_naive"),(int,float)) else "N/A")
+            st.caption("Forecast chỉ được công bố khi đủ dữ liệu thực và qua production gate. Skill > 0 nghĩa là tốt hơn benchmark giữ nguyên mức gần nhất.")
+        else:
+            temp=daily[["date","interbank_bronze"]].dropna().copy()
+            temp["date"]=pd.to_datetime(temp["date"])
+            temp=temp[temp["date"]>=temp["date"].max()-pd.Timedelta(days=365)]
+            fig=px.line(temp,x="date",y="interbank_bronze",title="Lãi suất liên ngân hàng — dữ liệu thực 12 tháng")
+            fig.update_layout(height=420,hovermode="x unified",yaxis_title="%/năm")
+            st.plotly_chart(fig,use_container_width=True)
+            st.warning("Đã có dữ liệu interbank thực nhưng chưa đủ production gate để forecast.")
     else:
-        st.warning("Interbank live hiện chưa đủ/endpoint đang lỗi. Hệ thống không tự tạo chuỗi giả; forecast ON chỉ xuất hiện khi dữ liệu thực đạt ngưỡng.")
+        st.warning("Chưa lấy được chuỗi interbank thực. Refresh mới sẽ thử lần lượt `interbank_rate`, `currency.interest_rate` và legacy `interest_rate`; không tạo chuỗi giả.")
+        if len(refresh):
+            ir=refresh[refresh["dataset"].astype(str).str.contains("interbank",case=False,na=False)]
+            if len(ir):
+                st.dataframe(safe_df(ir),hide_index=True,use_container_width=True)
 
 with tabs[3]:
     st.subheader("Funding Stress theo ngân hàng")
     if len(bank_fc):
         horizons=list(bank_fc["Horizon"].dropna().unique())
         h=st.selectbox("Horizon",horizons,index=min(1,len(horizons)-1) if horizons else 0)
-        b=bank_fc[bank_fc["Horizon"]==h].sort_values("StressVulnerability",ascending=False)
-        fig=px.bar(b,x="Ticker",y="StressVulnerability",color="Watch",
-                   title=f"Bank Stress Vulnerability — {h}",hover_data=["FundingCostShock_ppt","StressedNIM","Data Type"])
-        fig.update_layout(height=420)
-        st.plotly_chart(fig,use_container_width=True)
+        b=bank_fc[bank_fc["Horizon"]==h].copy()
+        b["StressVulnerability"]=pd.to_numeric(b["StressVulnerability"],errors="coerce")
+        b["Coverage"]=pd.to_numeric(b.get("Coverage"),errors="coerce")
+        valid=b.dropna(subset=["StressVulnerability"]).sort_values("StressVulnerability",ascending=False)
+        if len(valid):
+            fig=px.bar(valid,x="Ticker",y="StressVulnerability",color="Watch",
+                       title=f"Bank Stress Vulnerability — {h}",
+                       hover_data=["FundingCostShock_ppt","StressedNIM","Data Type","Source Mode","Coverage"])
+            fig.update_layout(height=430,yaxis_range=[0,max(100,float(valid["StressVulnerability"].max())*1.08)])
+            st.plotly_chart(fig,use_container_width=True)
+            bronze_used=int((valid["Source Mode"]=="BRONZE").sum())
+            fallback_used=int((valid["Source Mode"]=="FALLBACK").sum())
+            st.info(f"Mô hình đang dùng **{bronze_used} ngân hàng Bronze đủ coverage** và **{fallback_used} fallback ASSUMPTION**. Bronze chỉ được dùng khi có ít nhất 3/5 chỉ tiêu định lượng.")
+        else:
+            st.error("Bank stress chưa có dòng nào đủ dữ liệu định lượng. Chạy lại BAT mới để model tự fallback các ticker Bronze chưa parse đủ LDR/CASA/NIM.")
         st.dataframe(safe_df(b),hide_index=True,use_container_width=True)
         st.markdown("""
-**Cách đọc:** điểm càng cao nghĩa là ngân hàng càng nhạy với cú sốc thanh khoản hệ thống.  
-Điểm chịu tác động của LDR, CASA, phụ thuộc nguồn vốn liên ngân hàng, credit–deposit gap, NIM và LPI dự báo.
+**Cách đọc:** 0–60 tương đối thấp; 60–75 cần theo dõi; ≥75 là vùng stress cao theo rule của mô hình.  
+Điểm chịu tác động của **LDR, CASA, phụ thuộc liên ngân hàng, credit–deposit gap, NIM** và LPI dự báo.
 """)
     else:
-        st.warning("Chưa có bank stress forecast.")
+        st.warning("Chưa có bank stress forecast. Chạy REFRESH_BRONZE_BUILD_MODELS_AND_PUSH.bat.")
 
 with tabs[4]:
     st.subheader("Stress Lab")
     if len(bank_fc):
         base_now=bank_fc[bank_fc["Horizon"]=="Current"].copy()
-        lpi_shock=st.slider("Cú sốc LPI bổ sung",0.0,3.0,1.0,.1)
-        funding_cap=st.slider("Funding cost pass-through tối đa (ppt)",0.5,4.0,2.0,.25)
-        # Re-scale using current base vulnerability.
-        sim=base_now.copy()
-        sim["ScenarioVulnerability"]=(sim["BaseVulnerability"]*(1+.15*lpi_shock)).clip(0,100)
-        sim["ScenarioFundingCost_ppt"]=funding_cap*sim["ScenarioVulnerability"]/100
-        sim["ScenarioNIM"]=np.maximum(0,pd.to_numeric(sim["StressedNIM"],errors="coerce")+pd.to_numeric(sim["FundingCostShock_ppt"],errors="coerce")/100-sim["ScenarioFundingCost_ppt"]/100)
-        fig=px.bar(sim.sort_values("ScenarioVulnerability",ascending=False),x="Ticker",y="ScenarioVulnerability",
-                   title="Vulnerability dưới kịch bản stress tùy chỉnh")
-        st.plotly_chart(fig,use_container_width=True)
-        st.dataframe(safe_df(sim[["Ticker","ScenarioVulnerability","ScenarioFundingCost_ppt","ScenarioNIM","Data Type","Source Mode"]]),
-                     hide_index=True,use_container_width=True)
-        st.caption("Stress Lab là mô phỏng kịch bản, không phải forecast xác suất. Các slider là ASSUMPTION và được tách khỏi dữ liệu ACTUAL.")
+        base_now["BaseVulnerability"]=pd.to_numeric(base_now["BaseVulnerability"],errors="coerce")
+        base_now["StressedNIM"]=pd.to_numeric(base_now["StressedNIM"],errors="coerce")
+        base_now["FundingCostShock_ppt"]=pd.to_numeric(base_now["FundingCostShock_ppt"],errors="coerce")
+        base_now=base_now.dropna(subset=["BaseVulnerability"])
+        if len(base_now):
+            lpi_shock=st.slider("Cú sốc LPI bổ sung",0.0,3.0,1.0,.1)
+            funding_cap=st.slider("Funding cost pass-through tối đa (ppt)",0.5,4.0,2.0,.25)
+            sim=base_now.copy()
+            sim["ScenarioVulnerability"]=(sim["BaseVulnerability"]*(1+.15*lpi_shock)).clip(0,100)
+            sim["ScenarioFundingCost_ppt"]=funding_cap*sim["ScenarioVulnerability"]/100
+            current_nim=np.maximum(0,sim["StressedNIM"]+sim["FundingCostShock_ppt"]/100)
+            sim["ScenarioNIM"]=np.maximum(0,current_nim-sim["ScenarioFundingCost_ppt"]/100)
+            sim["ScenarioWatch"]=np.select(
+                [(sim["ScenarioVulnerability"]>=75)|(sim["ScenarioNIM"]<.02),sim["ScenarioVulnerability"]>=60],
+                ["RED","AMBER"],default="GREEN"
+            )
+            fig=px.bar(sim.sort_values("ScenarioVulnerability",ascending=False),x="Ticker",y="ScenarioVulnerability",
+                       color="ScenarioWatch",title="Vulnerability dưới kịch bản stress tùy chỉnh")
+            fig.update_layout(height=430,yaxis_range=[0,105])
+            st.plotly_chart(fig,use_container_width=True)
+            st.dataframe(safe_df(sim[["Ticker","ScenarioVulnerability","ScenarioFundingCost_ppt","ScenarioNIM","ScenarioWatch","Data Type","Source Mode"]]),
+                         hide_index=True,use_container_width=True)
+            st.caption("Đây là scenario analysis, không phải forecast xác suất. Slider là ASSUMPTION; dữ liệu nền vẫn tuân theo Bronze ACTUAL → fallback nếu thiếu.")
+        else:
+            st.error("Không có BaseVulnerability hợp lệ. Chạy lại BAT mới để tái xây dựng bank stress với ticker-level fallback.")
     else:
         st.warning("Chưa có dữ liệu để mô phỏng.")
 

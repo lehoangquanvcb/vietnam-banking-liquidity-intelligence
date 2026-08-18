@@ -26,22 +26,43 @@ def norm(s):
 def find_metric(df,keys):
     if df is None or len(df)==0:
         return None
-    for lc in [c for c in ["id","name"] if c in df.columns]:
-        labels=df[lc].astype(str).map(norm)
+    x=df.copy()
+    # Flatten MultiIndex / tuple columns often returned by financial endpoints.
+    x.columns=[" | ".join(map(str,c)) if isinstance(c,tuple) else str(c) for c in x.columns]
+
+    # 1. Long-schema label columns.
+    candidate_label_cols=[c for c in x.columns if norm(c) in {"id","name","item","indicator","metric","code"}]
+    candidate_label_cols += [c for c in x.columns[:min(4,len(x.columns))] if c not in candidate_label_cols]
+    for lc in candidate_label_cols:
+        labels=x[lc].astype(str).map(norm)
         for k in keys:
-            mask=labels.str.contains(norm(k),regex=False)
+            nk=norm(k)
+            mask=labels.str.contains(nk,regex=False,na=False)
             if mask.any():
-                for c in reversed(df.columns):
-                    if c in ["id","name","unit","period","report_period","order","level"]:
+                # Search all other columns and prefer the rightmost/latest numeric value.
+                for c in reversed(x.columns):
+                    if c==lc:
                         continue
-                    v=pd.to_numeric(df.loc[mask,c],errors="coerce").dropna()
-                    if len(v):
-                        return float(v.iloc[0])
-    for c in df.columns:
-        if any(norm(k) in norm(c) for k in keys):
-            v=pd.to_numeric(df[c],errors="coerce").dropna()
-            if len(v):
-                return float(v.iloc[0])
+                    vals=pd.to_numeric(x.loc[mask,c],errors="coerce").dropna()
+                    if len(vals):
+                        return float(vals.iloc[0])
+
+    # 2. Wide-schema metric names in column headers.
+    for c in x.columns:
+        nc=norm(c)
+        if any(norm(k) in nc for k in keys):
+            vals=pd.to_numeric(x[c],errors="coerce").dropna()
+            if len(vals):
+                return float(vals.iloc[0])
+
+    # 3. Search text across cells for semi-structured tables.
+    for idx,row in x.iterrows():
+        row_text=" | ".join(norm(v) for v in row.values[:min(5,len(row))])
+        if any(norm(k) in row_text for k in keys):
+            for v in reversed(row.values):
+                n=pd.to_numeric(pd.Series([v]),errors="coerce").dropna()
+                if len(n):
+                    return float(n.iloc[0])
     return None
 
 def period_of(*dfs):
@@ -130,28 +151,33 @@ for name,fn in {**jobs_daily,**jobs_monthly}.items():
         status.append([name,"ERROR",str(e)[:300],now()])
     time.sleep(.25)
 
-# Interbank has shown 404 on some Bronze backends. Try several signatures and preserve old file if all fail.
+# Interbank: robust fallback chain based on current Vnstock Macro API.
+# 1) dedicated interbank_rate
+# 2) currency.interest_rate (official broader rate endpoint)
+# 3) legacy Macro.interest_rate for backward compatibility
 interbank_ok=False
 interbank_errors=[]
 interbank_calls=[
-    lambda: m.currency().interbank_rate(period="day",length=3650),
-    lambda: m.currency().interbank_rate(start="2018-01-01",period="day"),
+    ("currency.interbank_rate(length)", lambda: m.currency().interbank_rate(period="day",length=3650)),
+    ("currency.interbank_rate(start)", lambda: m.currency().interbank_rate(start="2018-01-01",period="day")),
+    ("currency.interest_rate(length)", lambda: m.currency().interest_rate(length=3650)),
+    ("currency.interest_rate(start)", lambda: m.currency().interest_rate(start="2018-01-01",period="day")),
+    ("legacy interest_rate", lambda: m.interest_rate(length=3650)),
 ]
-for call in interbank_calls:
+for label,call in interbank_calls:
     try:
         df=call()
         if save_actual(df,"interbank"):
             interbank_ok=True
+            status.append(["interbank","OK",f"Source fallback used: {label}",now()])
             break
     except Exception as e:
-        interbank_errors.append(str(e)[:200])
+        interbank_errors.append(f"{label}: {str(e)[:180]}")
 
-if interbank_ok:
-    status.append(["interbank","OK","",now()])
-else:
+if not interbank_ok:
     old=DATA/"interbank_bronze.csv"
     if old.exists() and old.stat().st_size>100:
-        status.append(["interbank","DEGRADED","Live refresh failed; retained prior file. "+" | ".join(interbank_errors),now()])
+        status.append(["interbank","DEGRADED","Live refresh failed; retained prior ACTUAL file. "+" | ".join(interbank_errors),now()])
     else:
         status.append(["interbank","ERROR"," | ".join(interbank_errors),now()])
 

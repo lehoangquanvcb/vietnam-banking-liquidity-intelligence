@@ -73,7 +73,7 @@ def rolling_z(s,w=60):
 def build_daily_panel():
     parts=[]
     omo=series_from("omo_bronze",["netflow_amount","netflow","net flow","net","value"])
-    ib=series_from("interbank_bronze",["overnight","on","qua đêm","value","rate"])
+    ib=series_from("interbank_bronze",["overnight","on","qua đêm","o/n","interbank","value","rate"])
     fx=series_from("fx_bronze",["usd","usd_vnd","close","sell","value","rate"])
     for x in [omo,ib,fx]:
         if len(x):
@@ -177,10 +177,16 @@ def regime_model(d):
         order=[k for k,_ in sorted(means,key=lambda z:z[1])]
         out=pd.DataFrame({
             "date":x["date"].values,
-            "P_Excess":probs[order[0]].values,
-            "P_Neutral":probs[order[1]].values,
-            "P_Stress":probs[order[2]].values,
+            "P_Excess_raw":probs[order[0]].values,
+            "P_Neutral_raw":probs[order[1]].values,
+            "P_Stress_raw":probs[order[2]].values,
         })
+        # 20-business-day smoothing makes regime visualization interpretable.
+        for src,dst in [("P_Excess_raw","P_Excess"),("P_Neutral_raw","P_Neutral"),("P_Stress_raw","P_Stress")]:
+            out[dst]=out[src].rolling(20,min_periods=1).mean()
+        total=out[["P_Excess","P_Neutral","P_Stress"]].sum(axis=1).replace(0,np.nan)
+        for c in ["P_Excess","P_Neutral","P_Stress"]:
+            out[c]=out[c]/total
         out["Regime"]=out[["P_Excess","P_Neutral","P_Stress"]].idxmax(axis=1).str.replace("P_","")
         return out,{"status":"OK","nobs":len(x),"aic":float(r.aic)}
     except Exception as e:
@@ -245,35 +251,67 @@ def monthly_var():
 def bank_stress(lpi_forecast):
     actual=load("bank_actuals_bronze")
     fallback=load("bank_fallback_assumptions")
+
+    metric_cols=["LDR","CASA","InterbankDep","CreditDepositGap","NIM"]
     if len(actual):
-        useful=actual[actual[["LDR","CASA","InterbankDep","CreditDepositGap","NIM"]].notna().sum(axis=1)>=3].copy()
+        a=actual.copy()
+        for c in metric_cols:
+            if c not in a.columns:
+                a[c]=np.nan
+            a[c]=pd.to_numeric(a[c],errors="coerce")
+        a["MetricCoverage"]=a[metric_cols].notna().mean(axis=1)
+        # Require at least 3/5 quantitative Bronze metrics.
+        useful=a[a["MetricCoverage"]>=0.60].copy()
     else:
         useful=pd.DataFrame()
+
+    # Fallback at ticker level whenever Bronze cannot actually support the stress model.
     missing=fallback[~fallback["Ticker"].isin(useful["Ticker"])] if len(useful) else fallback.copy()
+    if len(missing):
+        missing=missing.copy()
+        missing["MetricCoverage"]=missing[metric_cols].notna().mean(axis=1)
     bank=pd.concat([useful,missing],ignore_index=True) if len(useful) else missing
-    for c in ["LDR","CASA","InterbankDep","CreditDepositGap","NIM"]:
+
+    for c in metric_cols:
         bank[c]=pd.to_numeric(bank[c],errors="coerce")
         bank[c]=np.where(abs(bank[c])>2,bank[c]/100,bank[c])
+
     bank["LiquidityBuffer"]=1-bank["LDR"]
-    raw=50+35*(bank["LDR"]-.85)-25*(bank["CASA"]-.20)+45*bank["InterbankDep"]+30*bank["CreditDepositGap"]-10*(bank["NIM"]-.03)-20*(bank["LiquidityBuffer"]-.15)
+    bank["Coverage"]=bank[metric_cols].notna().mean(axis=1)
+    raw=(50
+         +35*(bank["LDR"]-.85)
+         -25*(bank["CASA"]-.20)
+         +45*bank["InterbankDep"]
+         +30*bank["CreditDepositGap"]
+         -10*(bank["NIM"]-.03)
+         -20*(bank["LiquidityBuffer"]-.15))
     bank["BaseVulnerability"]=raw.clip(0,100)
+    bank.loc[bank["Coverage"]<0.60,"BaseVulnerability"]=np.nan
+
     scenarios=[("Current",0.0)]
     if lpi_forecast is not None and len(lpi_forecast):
         for h in [5,20]:
             if h<=len(lpi_forecast):
                 scenarios.append((f"{h}D",float(lpi_forecast.iloc[h-1]["forecast"])))
+
     out=[]
     beta=CFG["bank_stress_beta_per_lpi"]
     for label,lpi in scenarios:
-        mult=1+beta*max(0,lpi)
         temp=bank.copy()
         temp["Horizon"]=label
         temp["LPI"]=lpi
+        mult=1+beta*max(0,lpi)
         temp["StressVulnerability"]=(temp["BaseVulnerability"]*mult).clip(0,100)
         temp["FundingCostShock_ppt"]=2.0*temp["StressVulnerability"]/100
         temp["StressedNIM"]=np.maximum(0,temp["NIM"]-temp["FundingCostShock_ppt"]/100)
-        temp["Watch"]=np.select([(temp["StressVulnerability"]>=75)|(temp["StressedNIM"]<.02),temp["StressVulnerability"]>=60],["RED","AMBER"],default="GREEN")
-        out.append(temp[["Ticker","Horizon","LPI","BaseVulnerability","StressVulnerability","FundingCostShock_ppt","StressedNIM","Watch","Data Type","Source Mode"]])
+        temp["Watch"]=np.select(
+            [(temp["StressVulnerability"]>=75)|(temp["StressedNIM"]<.02),temp["StressVulnerability"]>=60],
+            ["RED","AMBER"],default="GREEN"
+        )
+        out.append(temp[[
+            "Ticker","Horizon","LPI","BaseVulnerability","StressVulnerability",
+            "FundingCostShock_ppt","StressedNIM","Watch","Coverage","Data Type","Source Mode"
+        ]])
     return pd.concat(out,ignore_index=True)
 
 def main():
