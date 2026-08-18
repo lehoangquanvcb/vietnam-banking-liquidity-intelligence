@@ -1,41 +1,36 @@
-# Vietnam Banking Liquidity Intelligence — Production R2
+# Vietnam Banking Liquidity Intelligence — Production R3
 
-## Upgrade safety
-This package intentionally contains **NO `data/` directory**.
+## Kiến trúc Bronze giữ nguyên
+Persistent PC/self-hosted runner → `vnstock_data` Bronze → ACTUAL CSV → model outputs → GitHub → Streamlit Cloud.
 
-When upgrading, KEEP the repository's existing `data/` folder and replace only code/config/master files.
+Streamlit không cài hoặc gọi Sponsor.
 
-## Proven Bronze architecture
-Persistent PC/self-hosted runner → `vnstock_data` Bronze → ACTUAL CSV → governed model outputs → GitHub → Streamlit Cloud.
+## CODE ONLY
+Package này không có `data/`. Khi nâng cấp, giữ nguyên thư mục `data/` hiện có.
 
-Streamlit never installs/calls Sponsor.
+## Sửa dứt điểm Stress
+R3 có hai lớp bảo vệ:
+1. `build_models.py` luôn tạo đủ universe từ `config/bank_fallback_assumptions.csv` nếu Bronze coverage <60%.
+2. `app.py` tự tạo runtime fallback nếu `bank_stress_forecast.csv` cũ/rỗng/null.
 
-## Fixes in R2
-- No Streamlit `DeltaGenerator` objects are printed: all UI branches use explicit `if/else`.
-- Bank stress always has a ticker-level fallback from `config/bank_fallback_assumptions.csv` when Bronze coverage <60%.
-- Stress Lab uses valid `BaseVulnerability` rows only.
-- ARIMA must beat naive benchmark on holdout RMSE. Otherwise production automatically publishes `NAIVE_RANDOM_WALK`, Confidence=LOW.
-- True interbank only: never substitute deposit/lending rate proxy.
-- Optional ACTUAL interbank input can be entered in the Master workbook. At least 10 valid rows with source URLs are required before `data/interbank_manual.csv` is overwritten.
-- Bank parser prioritizes current `scorecard="banking"` Fundamental calls and stores raw financial tables for audit.
+Do đó Funding Stress và Stress Lab không còn được phép trống. Mọi fallback đều gắn nhãn `ASSUMPTION / FALLBACK`.
 
-## Commands
-After copying the code-only package (without deleting `data/`):
+## Forecast governance
+ARIMA chỉ được dùng nếu thắng naive benchmark trên holdout RMSE. Nếu không, dùng `NAIVE_RANDOM_WALK`, Confidence=LOW.
+
+## Interbank
+True interbank:
+1. Bronze `interbank_rate()`;
+2. `data/interbank_manual.csv` ACTUAL/public.
+
+Funding-rate proxy được hiển thị riêng khi interbank thiếu, nhưng không dùng để forecast ON.
+
+## Cách nâng cấp
+GIỮ `data/`, copy code package, rồi:
 ```
 git add -A
-git commit -m "Upgrade liquidity intelligence Production R2"
+git commit -m "Upgrade liquidity intelligence Production R3"
 git push origin main
 ```
-
-Then run:
+Sau đó chạy:
 `REFRESH_BRONZE_BUILD_MODELS_AND_PUSH.bat`
-
-## Interbank manual/public actual
-Use the `INTERBANK_INPUT` sheet in the Master workbook:
-- Date
-- Overnight Rate (% p.a.)
-- Source URL
-- Source Name
-- Data Type = ACTUAL
-
-The BAT exports it only when at least 10 valid observations exist. It never overwrites an existing actual file with an empty template.

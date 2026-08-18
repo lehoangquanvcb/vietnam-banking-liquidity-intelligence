@@ -20,85 +20,86 @@ def scale(v):
     v=float(v)
     return v/100 if abs(v)>2 else v
 
-def find_metric(df, id_terms=(), name_terms=()):
-    if df is None or len(df)==0: return None
+def flatten(df):
     x=df.copy()
     x.columns=[" | ".join(map(str,c)) if isinstance(c,tuple) else str(c) for c in x.columns]
-    # Stable semantic identifiers first when available.
-    for label_col in [c for c in x.columns if norm(c) in {"id","code","metric","indicator","name","item"}]:
-        labels=x[label_col].astype(str)
-        for term in list(id_terms)+list(name_terms):
-            mask=labels.str.contains(str(term),case=False,regex=False,na=False)
-            if mask.any():
-                for c in reversed(x.columns):
-                    if c==label_col: continue
-                    vals=pd.to_numeric(x.loc[mask,c],errors="coerce").dropna()
-                    if len(vals): return float(vals.iloc[0])
-    # Wide schema.
-    for c in x.columns:
-        if any(norm(term) in norm(c) for term in list(id_terms)+list(name_terms)):
-            vals=pd.to_numeric(x[c],errors="coerce").dropna()
-            if len(vals): return float(vals.iloc[-1])
-    # Semi-structured row labels.
-    for _,row in x.iterrows():
-        lead=" | ".join(str(v) for v in row.values[:min(5,len(row))])
-        if any(norm(term) in norm(lead) for term in list(id_terms)+list(name_terms)):
-            for v0 in reversed(row.values):
-                vals=pd.to_numeric(pd.Series([v0]),errors="coerce").dropna()
-                if len(vals): return float(vals.iloc[0])
-    return None
+    return x
 
-def get_equity(fun,ticker):
-    try:return fun.equity(ticker)
-    except Exception:return fun.equity(symbol=ticker)
+def find_metric(df, terms=()):
+    if df is None or len(df)==0:return None
+    x=flatten(df)
+    # label columns first
+    label_cols=[c for c in x.columns if norm(c) in {"id","code","metric","indicator","name","item","label"}]
+    label_cols += [c for c in x.columns[:min(4,len(x.columns))] if c not in label_cols]
+    for lc in label_cols:
+        labels=x[lc].astype(str).map(norm)
+        for term in terms:
+            m=labels.str.contains(norm(term),regex=False,na=False)
+            if m.any():
+                for c in reversed(x.columns):
+                    if c==lc: continue
+                    v=pd.to_numeric(x.loc[m,c],errors="coerce").dropna()
+                    if len(v): return float(v.iloc[0])
+    # wide columns
+    for c in x.columns:
+        if any(norm(term) in norm(c) for term in terms):
+            v=pd.to_numeric(x[c],errors="coerce").dropna()
+            if len(v): return float(v.iloc[-1])
+    # row scan
+    for _,row in x.iterrows():
+        lead=" | ".join(norm(v) for v in row.values[:min(6,len(row))])
+        if any(norm(term) in lead for term in terms):
+            for v0 in reversed(row.values):
+                v=pd.to_numeric(pd.Series([v0]),errors="coerce").dropna()
+                if len(v): return float(v.iloc[0])
+    return None
 
 def fetch_bank(ticker):
     fun=Fundamental()
-    eq=get_equity(fun,ticker)
+    try:eq=fun.equity(ticker)
+    except Exception:eq=fun.equity(symbol=ticker)
 
-    # Current documented calls prefer scorecard='banking'; preserve fallbacks for installed Sponsor versions.
-    try: bs=eq.balance_sheet(period="quarter",lang="en",scorecard="banking",dropna=False)
+    calls=[]
+    try:calls.append(("balance_sheet",eq.balance_sheet(period="quarter",lang="en",scorecard="banking",dropna=False)))
     except Exception:
-        try: bs=eq.balance_sheet(period="quarter",lang="en",format="long",com_type="Bank",drop_empty=False)
-        except Exception: bs=eq.balance_sheet(period="quarter")
-    try: ratio=eq.ratio(period="quarter",lang="en",scorecard="banking",dropna=False)
+        try:calls.append(("balance_sheet",eq.balance_sheet(period="quarter",lang="en",format="long",com_type="Bank",drop_empty=False)))
+        except Exception:calls.append(("balance_sheet",eq.balance_sheet(period="quarter")))
+    try:calls.append(("ratio",eq.ratio(period="quarter",lang="en",scorecard="banking",dropna=False)))
     except Exception:
-        try: ratio=eq.ratio(period="quarter",lang="en",format="long",com_type="Bank",drop_empty=False)
-        except Exception: ratio=eq.ratio(period="quarter")
-    try:
-        health=eq.financial_health(scorecard="bank",lang="en",limit=4)
-    except Exception:
-        health=pd.DataFrame()
+        try:calls.append(("ratio",eq.ratio(period="quarter",lang="en",format="long",com_type="Bank",drop_empty=False)))
+        except Exception:
+            try:calls.append(("ratio",eq.ratio(period="quarter")))
+            except Exception:calls.append(("ratio",pd.DataFrame()))
+    try:calls.append(("financial_health",eq.financial_health(scorecard="bank",lang="en",limit=4)))
+    except Exception:calls.append(("financial_health",pd.DataFrame()))
 
-    for name,df in [("balance_sheet",bs),("ratio",ratio),("financial_health",health)]:
+    tables={k:v for k,v in calls}
+    for name,df in calls:
         if df is not None and len(df):
             df.to_csv(RAW/f"{ticker}_{name}.csv",index=False,encoding="utf-8-sig")
 
-    ldr=find_metric(health,["LDR"],["loan to deposit","ldr"])
-    if ldr is None: ldr=find_metric(ratio,["LDR"],["loan to deposit","ldr"])
-    casa=find_metric(health,["CASA"],["casa","current account saving"])
-    if casa is None: casa=find_metric(ratio,["CASA"],["casa","current account saving"])
-    nim=find_metric(health,["NIM"],["net interest margin","nim"])
-    if nim is None: nim=find_metric(ratio,["NIM"],["net interest margin","nim"])
+    bs=tables["balance_sheet"]; ratio=tables["ratio"]; health=tables["financial_health"]
+    ldr=find_metric(health,["ldr","loan to deposit"]) or find_metric(ratio,["ldr","loan to deposit"])
+    casa=find_metric(health,["casa","current account saving"]) or find_metric(ratio,["casa","current account saving"])
+    nim=find_metric(health,["nim","net interest margin"]) or find_metric(ratio,["nim","net interest margin"])
 
-    loans=find_metric(bs,["CUSTOMER_LOANS","LOANS_TO_CUSTOMERS"],["customer loans","loans to customers","cho vay khách hàng"])
-    deposits=find_metric(bs,["CUSTOMER_DEPOSITS","DEPOSITS_FROM_CUSTOMERS"],["customer deposits","deposits from customers","tiền gửi khách hàng"])
-    assets=find_metric(bs,["TOTAL_ASSETS"],["total assets","tổng tài sản"])
-    interbank=find_metric(bs,["INTERBANK","CREDIT_INSTITUTIONS"],["credit institutions","interbank","tổ chức tín dụng"])
+    loans=find_metric(bs,["customer loans","loans to customers","cho vay khách hàng"])
+    deposits=find_metric(bs,["customer deposits","deposits from customers","tiền gửi khách hàng"])
+    assets=find_metric(bs,["total assets","tổng tài sản"])
+    ib=find_metric(bs,["interbank","credit institutions","tổ chức tín dụng"])
 
-    if (ldr is None or pd.isna(ldr)) and loans is not None and deposits not in (None,0):
-        ldr=loans/deposits
-    ibdep=interbank/assets if interbank is not None and assets not in (None,0) else np.nan
+    if (ldr is None or pd.isna(ldr)) and loans is not None and deposits not in (None,0):ldr=loans/deposits
+    ibdep=ib/assets if ib is not None and assets not in (None,0) else np.nan
     gap=(loans-deposits)/deposits if loans is not None and deposits not in (None,0) else np.nan
 
     vals=[scale(ldr),scale(casa),scale(ibdep),scale(gap),scale(nim)]
     coverage=float(pd.Series(vals).notna().mean())
     return [ticker,*vals,coverage,"ACTUAL","BRONZE","OK" if coverage>=.60 else "PARTIAL",now()]
 
-status=[]; rows=[]
+status=[];rows=[]
 for t in BANKS:
     try:
-        rows.append(fetch_bank(t)); status.append(["bank:"+t,"OK","",now()])
+        rows.append(fetch_bank(t));status.append(["bank:"+t,"OK","",now()])
     except Exception as e:
         status.append(["bank:"+t,"ERROR",str(e)[:400],now()])
     time.sleep(.25)
@@ -119,7 +120,6 @@ jobs={
     "omo":lambda:m.currency().omo(start="2018-01-01"),
     "fx":lambda:m.currency().exchange_rate(start="2018-01-01",period="day"),
     "policy_rate":lambda:m.currency().policy_rate(start="2018-01-01"),
-    # Documented as deposit/lending-rate series, hence stored only as a proxy.
     "funding_rate_proxy":lambda:m.currency().interest_rate(period="day",length=3650),
     "m2":lambda:m.economy().money_supply(period="month",length=180),
     "credit":lambda:m.economy().credit(period="month",length=180),
@@ -131,8 +131,8 @@ for name,fn in jobs.items():
     except Exception as e:status.append([name,"ERROR",str(e)[:400],now()])
     time.sleep(.25)
 
-# True interbank only: never substitute deposit/lending-rate proxy.
-ib_ok=False;errs=[]
+# True interbank only.
+errs=[];ib_ok=False
 for label,call in [
     ("currency.interbank_rate(length)",lambda:m.currency().interbank_rate(period="day",length=3650)),
     ("currency.interbank_rate(start)",lambda:m.currency().interbank_rate(start="2018-01-01",period="day")),
@@ -142,11 +142,11 @@ for label,call in [
             status.append(["interbank","OK",label,now()]);ib_ok=True;break
     except Exception as e:errs.append(f"{label}: {str(e)[:180]}")
 if not ib_ok:
-    manual=DATA/"interbank_manual.csv"; old=DATA/"interbank_bronze.csv"
+    manual=DATA/"interbank_manual.csv";old=DATA/"interbank_bronze.csv"
     if old.exists() and old.stat().st_size>100:
         status.append(["interbank","DEGRADED","Live failed; retained prior Bronze ACTUAL. "+" | ".join(errs),now()])
     elif manual.exists() and manual.stat().st_size>50:
-        status.append(["interbank","MANUAL_ACTUAL","Using data/interbank_manual.csv. "+" | ".join(errs),now()])
+        status.append(["interbank","MANUAL_ACTUAL","Using manual/public ACTUAL. "+" | ".join(errs),now()])
     else:
         status.append(["interbank","ERROR","No true interbank series. "+" | ".join(errs),now()])
 

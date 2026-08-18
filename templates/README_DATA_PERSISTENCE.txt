@@ -1,8 +1,8 @@
-PRODUCTION R2 IS CODE-ONLY.
+PRODUCTION R3 IS CODE-ONLY.
 
-DO NOT DELETE OR REPLACE YOUR EXISTING repository/data/ FOLDER.
+KEEP your existing repository/data/ folder.
 
-Copy/replace only:
+Copy/replace:
 app.py
 scripts/
 config/
@@ -15,3 +15,8 @@ README.md
 templates/
 
 Then run REFRESH_BRONZE_BUILD_MODELS_AND_PUSH.bat.
+
+R3 guarantees Funding Stress / Stress Lab through:
+1) model-build ticker fallback;
+2) Streamlit runtime fallback.
+All fallback rows remain labelled ASSUMPTION / FALLBACK.

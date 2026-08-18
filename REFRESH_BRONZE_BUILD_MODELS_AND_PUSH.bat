@@ -3,8 +3,8 @@ setlocal EnableExtensions
 cd /d "%~dp0"
 
 echo ============================================================
-echo BRONZE ACTUAL -> MODEL GOVERNANCE -> GITHUB -> STREAMLIT
-echo DATA/ IS PERSISTENT. CODE UPGRADE NEVER INITIALIZES DATA/.
+echo PRODUCTION R3: BRONZE -> GOVERNED MODELS -> GITHUB
+echo DATA/ IS PERSISTENT. DO NOT DELETE IT.
 echo ============================================================
 
 set "PYBRONZE="
@@ -24,14 +24,14 @@ if errorlevel 1 (
   if errorlevel 1 goto :error
 )
 
-echo [0/3] Optional: export ACTUAL interbank rows from Master...
+echo [0/3] Export optional manual/public interbank ACTUAL...
 "%PYBRONZE%" scripts\export_interbank_from_master.py
 
 echo [1/3] Refresh Bronze ACTUAL...
 "%PYBRONZE%" scripts\refresh_bronze.py
 if errorlevel 1 goto :error
 
-echo [2/3] Build governed forecasts and bank stress...
+echo [2/3] Build forecasts + guaranteed bank stress fallback...
 "%PYBRONZE%" scripts\build_models.py
 if errorlevel 1 goto :error
 
@@ -39,14 +39,14 @@ echo [3/3] Commit persistent data + model outputs...
 git add data
 git diff --cached --quiet
 if %errorlevel%==0 goto :done
-git commit -m "Refresh Bronze actual data and governed liquidity models"
+git commit -m "Refresh Bronze data and Production R3 models"
 if errorlevel 1 goto :error
 git push origin main
 if errorlevel 1 goto :error
 
 :done
 echo.
-echo HOAN TAT. Streamlit se doc data/model outputs moi tu GitHub.
+echo HOAN TAT. Streamlit se tu dong doc outputs moi tu GitHub.
 pause
 exit /b 0
 
