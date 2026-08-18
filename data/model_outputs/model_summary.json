@@ -1,0 +1,15 @@
+{
+  "generated_at": "2026-08-18T10:02:54.499575+07:00",
+  "lpi": {
+    "status": "NO_LPI"
+  },
+  "interbank": {
+    "status": "NO_INTERBANK_DATA"
+  },
+  "regime": {
+    "status": "NO_LPI"
+  },
+  "var": {
+    "status": "NO_DATA"
+  }
+}

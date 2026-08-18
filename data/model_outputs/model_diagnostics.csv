@@ -1,0 +1,5 @@
+﻿Target,Status,Model,Observations,RMSE,Naive RMSE,Skill vs Naive,AIC,BIC
+LPI,NO_LPI,,,,,,,
+Interbank ON,NO_INTERBANK_DATA,,,,,,,
+Liquidity Regime,NO_LPI,,,,,,,
+Monthly VAR,NO_DATA,,,,,,,

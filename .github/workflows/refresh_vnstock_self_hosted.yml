@@ -1,4 +1,4 @@
-name: Refresh Vnstock Bronze Data
+name: Refresh Bronze Liquidity Intelligence
 
 on:
   workflow_dispatch:
@@ -10,29 +10,25 @@ permissions:
 
 jobs:
   refresh:
-    # IMPORTANT: register YOUR persistent PC/server as a GitHub self-hosted runner.
-    # Do not change to ubuntu-latest for Bronze unless you understand Vnstock device limits.
     runs-on: [self-hosted]
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Refresh Bronze data
+      - name: Refresh Bronze and build models
         shell: powershell
         run: |
-          python scripts/refresh_bronze.py
+          $py = "$env:USERPROFILE\.venv\Scripts\python.exe"
+          if (-not (Test-Path $py)) { throw "Bronze Python not found: $py" }
+          & $py scripts/refresh_bronze.py
+          & $py scripts/build_models.py
 
-      - name: Commit refreshed data
+      - name: Commit outputs
         shell: powershell
         run: |
-          git config user.name "vnstock-data-bot"
-          git config user.email "vnstock-data-bot@users.noreply.github.com"
+          git config user.name "vnstock-liquidity-bot"
+          git config user.email "vnstock-liquidity-bot@users.noreply.github.com"
           git add data
           git diff --cached --quiet
-          if ($LASTEXITCODE -eq 0) {
-            Write-Host "No data changes"
-            exit 0
-          }
-          git commit -m "Automated Bronze data refresh"
+          if ($LASTEXITCODE -eq 0) { Write-Host "No changes"; exit 0 }
+          git commit -m "Automated Bronze data and model refresh"
           git push

@@ -1,0 +1,14 @@
+{
+  "forecast_horizon_business_days": 20,
+  "backtest_days": 20,
+  "min_daily_observations": 80,
+  "min_markov_observations": 120,
+  "min_monthly_var_observations": 36,
+  "z_window": 60,
+  "bank_stress_beta_per_lpi": 0.15,
+  "data_priority": [
+    "BRONZE_ACTUAL",
+    "PUBLIC_ACTUAL",
+    "ASSUMPTION"
+  ]
+}

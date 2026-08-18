@@ -1,0 +1,14 @@
+{
+  "current_lpi": null,
+  "current_state": "Không đủ dữ liệu",
+  "forecast_5d": null,
+  "forecast_20d": null,
+  "forecast_5d_state": "Không đủ dữ liệu",
+  "forecast_20d_state": "Không đủ dữ liệu",
+  "selected_model": null,
+  "why_model": "Mô hình được chọn theo RMSE ngoài mẫu thấp nhất trong nhóm ARIMA ứng viên; benchmark là dự báo giữ nguyên giá trị gần nhất.",
+  "top_drivers": [],
+  "confidence": "Độ tin cậy được đánh giá bằng rolling holdout RMSE, skill so với naive benchmark và dải dự báo 80%/95%.",
+  "so_what": "LPI tăng hàm ý funding pressure cao hơn, lãi suất liên ngân hàng và chi phí vốn ngân hàng có rủi ro tăng; ngân hàng LDR cao/CASA thấp nhạy cảm hơn.",
+  "caveats": "Dự báo phụ thuộc độ đầy đủ của OMO, interbank và FX. Nếu interbank bị 404 hoặc chuỗi tháng thiếu, app sẽ hạ confidence và không tự tạo lịch sử giả."
+}

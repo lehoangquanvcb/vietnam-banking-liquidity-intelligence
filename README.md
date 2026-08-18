@@ -1,45 +1,81 @@
-# Vietnam Banking Liquidity Intelligence — Production Bronze Pipeline
+# Vietnam Banking Liquidity Intelligence — Forecast & Explainable Edition
 
-## Vì sao đổi kiến trúc?
-`vnstock_data` Sponsor không phải package pip công khai. Vnstock yêu cầu cài bằng installer riêng và có chính sách giới hạn thiết bị. Streamlit Community Cloud dùng container có thể tái tạo, nên cài/kích hoạt Sponsor ngay trong app runtime là không ổn định.
+## Kiến trúc Bronze được giữ nguyên
+**Không cài hoặc gọi Vnstock Sponsor trên Streamlit Cloud.**
 
-Bản này tách:
-- **Bronze data acquisition**: chạy trên máy PC/server ổn định đã kích hoạt Sponsor.
-- **Streamlit production**: chỉ đọc CSV ACTUAL đã push lên GitHub và chạy mô hình.
+```text
+Persistent PC / self-hosted runner
+        ↓
+vnstock_data Bronze
+        ↓
+refresh_bronze.py
+        ↓
+ACTUAL CSV
+        ↓
+build_models.py
+        ↓
+Forecast / regime / drivers / diagnostics
+        ↓
+git push
+        ↓
+Streamlit Cloud
+```
 
-## 1. Streamlit Cloud
-Không cần API key, không cần `vnstock_data`, không chạy installer.
+Đây là kiến trúc chuẩn nên tái sử dụng cho các dự án Vnstock Bronze khác.
 
-Deploy:
-- Repository: repo hiện tại
-- Main file: `app.py`
-- `requirements.txt`: chỉ package chuẩn.
+## Một lần bấm để cập nhật
+Chạy:
+`REFRESH_BRONZE_BUILD_MODELS_AND_PUSH.bat`
 
-## 2. Bronze trên máy local
-Cài Vnstock Sponsor trên máy ổn định bằng installer chính thức của Vnstock.
+File BAT:
+1. tự tìm `C:\Users\<username>\.venv\Scripts\python.exe`;
+2. kiểm tra `vnstock_data`;
+3. cài model dependencies nếu thiếu;
+4. refresh Bronze ACTUAL;
+5. build forecasts;
+6. git commit + push.
 
-Khi `python -c "import vnstock_data"` chạy được, refresh bằng:
-`REFRESH_BRONZE_AND_PUSH.bat`
+## Model stack
+### LPI
+- ON/interbank z-score
+- FX 5-day return z-score
+- OMO z-score với dấu đảo: bơm ròng làm giảm stress
+- LPI = trung bình các component có ACTUAL
 
-Batch sẽ:
-1. chạy `scripts/refresh_bronze.py`;
-2. lấy 20 ngân hàng + macro bằng `vnstock_data`;
-3. lưu ACTUAL CSV trong `data/`;
-4. git add/commit/push;
-5. Streamlit tự redeploy.
+### Forecast selection
+Ứng viên:
+- ARIMA(1,0,0)
+- ARIMA(2,0,0)
+- ARIMA(1,1,0)
+- ARIMA(0,1,1)
 
-## 3. Tự động hóa không cần bấm .bat
-Package có:
-`.github/workflows/refresh_vnstock_self_hosted.yml`
+Model được chọn bằng RMSE holdout thấp nhất. Naive benchmark = giữ giá trị gần nhất.
 
-Đăng ký PC/server của bạn làm **GitHub self-hosted runner**, rồi workflow có thể chạy lịch từ thứ Hai đến thứ Sáu.
+Outputs:
+- 20 business-day forecast
+- 80% confidence interval
+- 95% confidence interval
+- RMSE / MAE / naive RMSE / skill vs naive / AIC / BIC
 
-Không đổi workflow sang `ubuntu-latest` nếu chưa cân nhắc giới hạn thiết bị Sponsor; self-hosted runner giữ cùng một máy ổn định.
+### Liquidity regime
+Markov Switching 3 trạng thái:
+- Excess
+- Neutral
+- Stress
 
-## 4. Linux server ổn định
-Có `scripts/bootstrap_bronze_linux.sh` theo CLI non-interactive của Vnstock. Đặt `VNSTOCK_API_KEY` trong environment của server rồi chạy script một lần.
+### Monthly VAR
+Chỉ chạy nếu có >=36 quan sát tháng thực và >=2 biến hợp lệ.
+Không synthetic-fill dữ liệu thiếu.
 
-## Data lineage
-- `BRONZE + ACTUAL`: dữ liệu lấy từ `vnstock_data`.
-- `PUBLIC + ACTUAL`: snapshot công khai.
-- `FALLBACK + ASSUMPTION`: chỉ dùng cho mã thiếu actual.
+### Bank stress transmission
+LPI forecast → bank funding vulnerability → funding cost shock → stressed NIM → GREEN/AMBER/RED.
+
+## Important data rules
+- BRONZE + ACTUAL luôn ưu tiên.
+- PUBLIC + ACTUAL là fallback vĩ mô.
+- ASSUMPTION chỉ dùng khi dữ liệu ngân hàng actual thiếu.
+- Không đổi nhãn ASSUMPTION thành ACTUAL.
+- Không tạo lịch sử giả để model chạy.
+
+## Interbank endpoint
+Bronze backend đã từng trả 404. Refresh script thử nhiều signature; nếu vẫn lỗi nhưng có file cũ, trạng thái là DEGRADED và giữ file ACTUAL trước đó.
