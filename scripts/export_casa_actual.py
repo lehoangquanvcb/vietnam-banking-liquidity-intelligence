@@ -40,7 +40,7 @@ x["Ticker"] = x["Ticker"].astype(str).str.upper().str.strip()
 x["CASA"] = pd.to_numeric(x["CASA"], errors="coerce")
 x.loc[(x["CASA"] > 1.5) & (x["CASA"] <= 100), "CASA"] = x.loc[(x["CASA"] > 1.5) & (x["CASA"] <= 100), "CASA"] / 100.0
 x = x[(x["CASA"] >= 0) & (x["CASA"] <= 1)]
-x = x[x["DataType"].astype(str).str.upper().eq("ACTUAL")]
+x = x[x["DataType"].astype(str).str.upper().isin(["ACTUAL","ACTUAL_PUBLIC_SOURCE"])]
 x = x[x["SourceURL"].astype(str).str.startswith("http")]
 x = x[x["Ticker"].str.len().between(3,4)]
 

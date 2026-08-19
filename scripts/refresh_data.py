@@ -237,13 +237,23 @@ def fetch_bank(ticker):
 
 
 def load_casa_actual():
-    """Load latest validated public CASA observations from data/casa_actual.csv."""
-    path = DATA / "casa_actual.csv"
-    if not path.exists():
-        return pd.DataFrame()
-    try:
-        x = pd.read_csv(path)
-    except Exception:
+    """Load CASA using priority: user actual file -> packaged public seed."""
+    candidates = [
+        DATA / "casa_actual.csv",
+        ROOT / "config" / "casa_actual_public_seed.csv",
+    ]
+    x = pd.DataFrame()
+    for path in candidates:
+        if not path.exists():
+            continue
+        try:
+            candidate = pd.read_csv(path)
+            if len(candidate):
+                x = candidate.copy()
+                break
+        except Exception:
+            continue
+    if x.empty:
         return pd.DataFrame()
     if x.empty or "Ticker" not in x.columns or "CASA" not in x.columns:
         return pd.DataFrame()
@@ -408,7 +418,7 @@ if len(casa_actual):
             r = casa_actual.loc[ticker]
             bank_df.at[i, "CASA"] = float(r["CASA"])
             bank_df.at[i, "CASASource"] = "ACTUAL_PUBLIC_SOURCE"
-            bank_df.at[i, "CASADataType"] = "ACTUAL"
+            bank_df.at[i, "CASADataType"] = str(r.get("DataType", "ACTUAL_PUBLIC_SOURCE"))
             bank_df.at[i, "CASAPeriod"] = r.get("Period", "")
             bank_df.at[i, "CASASourceName"] = r.get("SourceName", "")
             bank_df.at[i, "CASASourceURL"] = r.get("SourceURL", "")

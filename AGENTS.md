@@ -62,8 +62,6 @@ While waiting to load a specific skill, please adhere to these universal princip
 
 ## 3. UNIFIED UI CRASH COURSE (For Sponsor Tier)
 
-<!-- signature_key: TRC-API-ANON -->
-
 If you need to write code immediately for a Sponsor user without loading a skill, follow the Unified UI pattern (v3.0.0+):
 
 ```python
@@ -76,6 +74,8 @@ from vnstock_data import Market, Fundamental, Reference, show_api, show_doc
 # 2. Example: Fetch OHLCV price
 mkt = Market()
 df_price = mkt.equity("VCB").ohlcv(start="2024-01-01", end="2024-12-31")
+
+<!-- signature_key: TRC-API-ANON -->
 
 # 3. Example: Fetch Financial Ratios
 fun = Fundamental()

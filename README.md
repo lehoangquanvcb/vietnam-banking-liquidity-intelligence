@@ -84,3 +84,17 @@ Nếu 4 metric Vnstock + CASA public đều là ACTUAL, lineage là `ACTUAL_MIXE
 Pipeline thử `interbank_rate()` theo từng năm từ 2021 đến nay để tránh request quá lớn. Nếu dedicated endpoint không usable, vẫn dùng `interest_rate()` đã hoạt động.
 
 Forecast Interbank giờ dùng **chính số quan sát ACTUAL trong interbank.csv**, không dùng các giá trị được forward-fill trong daily panel. Vì vậy Diagnostics phản ánh đúng sample thực.
+
+
+## CASA 30/06/2026 đã được nạp sẵn
+Package có `config/casa_actual_public_seed.csv` cho đủ 20 ngân hàng, ngày 30/06/2026.
+
+Nguồn: VietNamNet, bảng CASA tổng hợp từ BCTC bán niên 2026 của các ngân hàng.
+
+Ưu tiên dữ liệu:
+1. CASA trực tiếp từ Vnstock;
+2. `data/casa_actual.csv` do người dùng cập nhật;
+3. `config/casa_actual_public_seed.csv`;
+4. assumption chỉ khi cả ba nguồn trên đều không có.
+
+CASA từ public seed được gắn `ACTUAL_PUBLIC_SOURCE`; nếu 4 metric còn lại là Bronze ACTUAL thì stress lineage trở thành `ACTUAL_MIXED_SOURCE`, không gọi nhầm là BRONZE.
