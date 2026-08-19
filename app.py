@@ -216,8 +216,9 @@ with tabs[5]:
     st.subheader("Model Diagnostics")
     if len(diag): st.dataframe(safe(diag), hide_index=True, use_container_width=True)
     st.subheader("Bank Data Quality")
+    st.caption("CASA ưu tiên tỷ lệ công bố trực tiếp từ Vnstock; nếu thiếu, hệ thống tự tính CASA = tiền gửi không kỳ hạn/demand deposits ÷ tiền gửi khách hàng. CASASource cho biết nguồn của từng ngân hàng.")
     if len(bank):
-        cols = [c for c in ["Ticker","LDR","CASA","InterbankDep","CreditDepositGap","NIM","ActualMetricCount","MetricCoverage","ParseStatus","ParserLog"] if c in bank.columns]
+        cols = [c for c in ["Ticker","LDR","CASA","CASASource","DemandDeposits","CustomerDeposits","InterbankDep","CreditDepositGap","NIM","ActualMetricCount","MetricCoverage","ParseStatus","ParserLog"] if c in bank.columns]
         st.dataframe(safe(bank[cols]), hide_index=True, use_container_width=True)
     st.subheader("Refresh Log")
     if len(log): st.dataframe(safe(log), hide_index=True, use_container_width=True)

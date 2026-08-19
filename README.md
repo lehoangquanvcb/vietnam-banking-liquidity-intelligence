@@ -57,3 +57,10 @@ RUN_UPDATE_AND_PUSH.bat
 ```
 
 BAT sẽ lấy lại dữ liệu ACTUAL, build model, `git add -A`, commit và push cả code sạch + data/model outputs mới. Streamlit Cloud sẽ tự đọc commit mới.
+
+
+## CASA governance
+- Priority 1: reported CASA from `financial_health(scorecard="bank")`.
+- Priority 2: reported CASA from `ratio()`.
+- Priority 3: derived public-BS proxy = non-term/demand customer deposits / total customer deposits.
+- `CASASource` records lineage; invalid values outside 0-100% are rejected.

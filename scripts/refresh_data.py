@@ -143,9 +143,17 @@ def fetch_bank(ticker):
     ldr = metric(health, ["RT_BANK_LDR"], ["loan to deposit ratio", "ldr"])
     if pd.isna(ldr):
         ldr = metric(ratio, ["RT_BANK_LDR"], ["loan to deposit ratio", "ldr"])
-    casa = metric(health, ["RT_BANK_CASA"], ["casa", "current account saving"])
+    # CASA: prefer a directly reported ratio. Vnstock bank scorecards/ratios do not
+    # consistently expose CASA for every bank, so derive it from the balance sheet
+    # only when the direct metric is absent. In Vietnamese banking practice the
+    # comparable public-data proxy is non-term/demand customer deposits divided by
+    # total customer deposits.
+    casa = metric(health, ["RT_BANK_CASA"], ["casa", "current account saving", "current account and savings"])
+    casa_source = "DIRECT_FINANCIAL_HEALTH" if pd.notna(casa) else ""
     if pd.isna(casa):
-        casa = metric(ratio, ["RT_BANK_CASA"], ["casa", "current account saving"])
+        casa = metric(ratio, ["RT_BANK_CASA"], ["casa", "current account saving", "current account and savings"])
+        if pd.notna(casa):
+            casa_source = "DIRECT_RATIO"
     nim = metric(health, ["RT_BANK_NIM"], ["net interest margin", "nim"])
     if pd.isna(nim):
         nim = metric(ratio, ["RT_BANK_NIM"], ["net interest margin", "nim"])
@@ -156,6 +164,28 @@ def fetch_bank(ticker):
         ["loans to customers", "customer loans", "loans and advances to customers"],
     )
     deposits = metric(bs, ["BS_CUSTOMER_DEPOSITS"], ["customer deposits", "deposits from customers"])
+    # Non-term/demand deposits are the defensible public-BS proxy for CASA when a
+    # reported CASA ratio is unavailable. Keep the derivation explicit for audit.
+    demand_deposits = metric(
+        bs,
+        [
+            "BS_DEMAND_DEPOSITS",
+            "BS_CUSTOMER_DEMAND_DEPOSITS",
+            "BS_NON_TERM_DEPOSITS",
+            "BS_DEPOSITS_WITHOUT_TERM",
+            "BS_CURRENT_ACCOUNTS",
+        ],
+        [
+            "demand deposits",
+            "customer demand deposits",
+            "non term deposits",
+            "non-term deposits",
+            "deposits without term",
+            "current accounts",
+            "current account deposits",
+            "demand and current deposits",
+        ],
+    )
     assets = metric(bs, ["BS_TOTAL_ASSETS"], ["total assets"])
     ib_liab = metric(
         bs,
@@ -173,6 +203,15 @@ def fetch_bank(ticker):
 
     if pd.isna(ldr) and pd.notna(loans) and pd.notna(deposits) and deposits != 0:
         ldr = float(loans / deposits)
+    if pd.isna(casa) and pd.notna(demand_deposits) and pd.notna(deposits) and deposits != 0:
+        casa = float(demand_deposits / deposits)
+        casa_source = "DERIVED_BALANCE_SHEET"
+    # Normalize directly reported percentage-style values to ratios where needed.
+    if pd.notna(casa) and casa > 1.5 and casa <= 100:
+        casa = casa / 100.0
+    if pd.notna(casa) and not (0 <= casa <= 1):
+        casa = np.nan
+        casa_source = "INVALID_RANGE"
     interbank_dep = float(ib_liab / assets) if pd.notna(ib_liab) and pd.notna(assets) and assets != 0 else np.nan
     gap = float((loans - deposits) / deposits) if pd.notna(loans) and pd.notna(deposits) and deposits != 0 else np.nan
 
@@ -182,6 +221,9 @@ def fetch_bank(ticker):
         "Ticker": ticker,
         "LDR": ldr,
         "CASA": casa,
+        "CASASource": casa_source or "NOT_AVAILABLE",
+        "DemandDeposits": demand_deposits,
+        "CustomerDeposits": deposits,
         "InterbankDep": interbank_dep,
         "CreditDepositGap": gap,
         "NIM": nim,
