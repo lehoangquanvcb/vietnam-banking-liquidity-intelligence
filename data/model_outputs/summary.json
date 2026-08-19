@@ -12,7 +12,7 @@
   },
   "interbank": {
     "status": "INSUFFICIENT_HISTORY",
-    "nobs": 56
+    "nobs": 23
   },
   "regime": {
     "status": "OK",
@@ -22,8 +22,9 @@
   "bank_stress": {
     "valid_banks": 20,
     "bronze": 0,
+    "actual_mixed": 0,
     "hybrid": 20,
     "fallback": 0
   },
-  "generated_at": "2026-08-19T08:42:12.503206+07:00"
+  "generated_at": "2026-08-19T09:21:43.993216+07:00"
 }

@@ -64,3 +64,23 @@ BAT sẽ lấy lại dữ liệu ACTUAL, build model, `git add -A`, commit và p
 - Priority 2: reported CASA from `ratio()`.
 - Priority 3: derived public-BS proxy = non-term/demand customer deposits / total customer deposits.
 - `CASASource` records lineage; invalid values outside 0-100% are rejected.
+
+
+## Nâng cấp ACTUAL CASA
+
+Nếu Vnstock không trả CASA trực tiếp và balance sheet không có demand deposits, hệ thống không giả định đó là ACTUAL.
+
+Thứ tự CASA:
+1. Vnstock `financial_health`;
+2. Vnstock `ratio`;
+3. Derived demand/non-term deposits ÷ customer deposits nếu Vnstock thực sự có tử số;
+4. `CASA_INPUT` trong Excel Master / `data/casa_actual.csv`, chỉ nhận `DataType=ACTUAL` và SourceURL hợp lệ;
+5. nếu vẫn thiếu: bank stress dùng assumption cho riêng CASA và gắn `HYBRID`.
+
+Nếu 4 metric Vnstock + CASA public đều là ACTUAL, lineage là `ACTUAL_MIXED_SOURCE`, không gọi nhầm là `BRONZE`.
+
+## Mở rộng Interbank ON
+
+Pipeline thử `interbank_rate()` theo từng năm từ 2021 đến nay để tránh request quá lớn. Nếu dedicated endpoint không usable, vẫn dùng `interest_rate()` đã hoạt động.
+
+Forecast Interbank giờ dùng **chính số quan sát ACTUAL trong interbank.csv**, không dùng các giá trị được forward-fill trong daily panel. Vì vậy Diagnostics phản ánh đúng sample thực.

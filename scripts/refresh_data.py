@@ -235,6 +235,32 @@ def fetch_bank(ticker):
     }
 
 
+
+def load_casa_actual():
+    """Load latest validated public CASA observations from data/casa_actual.csv."""
+    path = DATA / "casa_actual.csv"
+    if not path.exists():
+        return pd.DataFrame()
+    try:
+        x = pd.read_csv(path)
+    except Exception:
+        return pd.DataFrame()
+    if x.empty or "Ticker" not in x.columns or "CASA" not in x.columns:
+        return pd.DataFrame()
+    x["Ticker"] = x["Ticker"].astype(str).str.upper().str.strip()
+    x["CASA"] = pd.to_numeric(x["CASA"], errors="coerce")
+    # Accept 0-1 ratios or 0-100 percentages.
+    x.loc[(x["CASA"] > 1.5) & (x["CASA"] <= 100), "CASA"] = x.loc[(x["CASA"] > 1.5) & (x["CASA"] <= 100), "CASA"] / 100.0
+    x = x[(x["CASA"] >= 0) & (x["CASA"] <= 1)].copy()
+    if "AsOfDate" in x.columns:
+        x["_date"] = pd.to_datetime(x["AsOfDate"], errors="coerce")
+    elif "Period" in x.columns:
+        x["_date"] = pd.to_datetime(x["Period"].astype(str).str.replace("Q1","-03-31").str.replace("Q2","-06-30").str.replace("Q3","-09-30").str.replace("Q4","-12-31"), errors="coerce")
+    else:
+        x["_date"] = pd.NaT
+    x = x.sort_values(["Ticker","_date"], na_position="first").drop_duplicates("Ticker", keep="last")
+    return x.set_index("Ticker")
+
 def save_macro(df, filename):
     if df is None or len(df) == 0:
         return False
@@ -306,11 +332,37 @@ def extract_interbank(raw):
 def fetch_interbank(macro):
     attempts = []
     currency = macro.currency()
-    # Official dedicated method first.
-    start = (datetime.now() - timedelta(days=400)).strftime("%Y-%m-%d")
-    end = datetime.now().strftime("%Y-%m-%d")
+
+    # 1) Dedicated interbank API in smaller yearly chunks to extend history
+    # without sending one oversized request.
+    today = pd.Timestamp.now().normalize()
+    chunks = []
+    chunk_start = pd.Timestamp("2021-01-01")
+    while chunk_start <= today:
+        chunk_end = min(chunk_start + pd.DateOffset(years=1) - pd.Timedelta(days=1), today)
+        try:
+            raw = currency.interbank_rate(
+                start=chunk_start.strftime("%Y-%m-%d"),
+                end=chunk_end.strftime("%Y-%m-%d"),
+                period="day"
+            )
+            parsed = extract_interbank(raw)
+            attempts.append(f"interbank_rate:{chunk_start.date()}->{chunk_end.date()}:raw={len(flatten(raw))},on={len(parsed)}")
+            if len(parsed):
+                chunks.append(parsed)
+        except Exception as exc:
+            attempts.append(f"interbank_rate:{chunk_start.date()}->{chunk_end.date()}:ERROR:{str(exc)[:120]}")
+        chunk_start = chunk_end + pd.Timedelta(days=1)
+        time.sleep(0.10)
+
+    if chunks:
+        hist = pd.concat(chunks, ignore_index=True)
+        hist = hist.dropna().sort_values("date").drop_duplicates("date", keep="last")
+        if len(hist):
+            return hist, "INTERBANK_RATE_CHUNKED", " | ".join(attempts)
+
+    # 2) Runtime-compatible interest_rate calls. These can be sparse but are real.
     for label, fn in [
-        ("interbank_rate", lambda: currency.interbank_rate(start=start, end=end, period="day")),
         ("interest_rate_long", lambda: currency.interest_rate(period="day", length=365, format="long")),
         ("interest_rate_pivot", lambda: currency.interest_rate(period="day", length=365)),
         ("interest_rate_180", lambda: currency.interest_rate(period="day", length=180, format="long")),
@@ -342,6 +394,34 @@ bank_df = pd.DataFrame(rows)
 for c in ["LDR", "CASA", "InterbankDep", "CreditDepositGap", "NIM"]:
     if c not in bank_df.columns:
         bank_df[c] = np.nan
+
+# Merge ACTUAL public CASA only where Vnstock direct/derived CASA is missing.
+casa_actual = load_casa_actual()
+for c in ["CASADataType","CASAPeriod","CASASourceName","CASASourceURL"]:
+    if c not in bank_df.columns:
+        bank_df[c] = None
+
+if len(casa_actual):
+    for i in bank_df.index:
+        ticker = str(bank_df.at[i, "Ticker"]).upper()
+        if ticker in casa_actual.index and pd.isna(pd.to_numeric(pd.Series([bank_df.at[i, "CASA"]]), errors="coerce").iloc[0]):
+            r = casa_actual.loc[ticker]
+            bank_df.at[i, "CASA"] = float(r["CASA"])
+            bank_df.at[i, "CASASource"] = "ACTUAL_PUBLIC_SOURCE"
+            bank_df.at[i, "CASADataType"] = "ACTUAL"
+            bank_df.at[i, "CASAPeriod"] = r.get("Period", "")
+            bank_df.at[i, "CASASourceName"] = r.get("SourceName", "")
+            bank_df.at[i, "CASASourceURL"] = r.get("SourceURL", "")
+
+# Recalculate coverage after all CASA sources have been applied.
+metric_fields = ["LDR","CASA","InterbankDep","CreditDepositGap","NIM"]
+for i in bank_df.index:
+    vals = [pd.to_numeric(pd.Series([bank_df.at[i,c]]), errors="coerce").iloc[0] for c in metric_fields]
+    count = int(pd.Series(vals, dtype="float64").notna().sum())
+    bank_df.at[i, "ActualMetricCount"] = count
+    bank_df.at[i, "MetricCoverage"] = count / 5
+    bank_df.at[i, "ParseStatus"] = "OK" if count >= 3 else "PARTIAL" if count else "NO_METRICS"
+
 bank_df.to_csv(DATA / "bank_metrics.csv", index=False, encoding="utf-8-sig")
 
 macro = Macro()

@@ -24,22 +24,25 @@ if errorlevel 1 (
   if errorlevel 1 goto :error
 )
 
-echo [1/4] Optional manual interbank input...
+echo [1/5] Export optional CASA ACTUAL input...
+"%PYBRONZE%" scripts\export_casa_actual.py
+
+echo [2/5] Optional manual interbank input...
 "%PYBRONZE%" scripts\export_manual_interbank.py
 
-echo [2/4] Refresh actual data...
+echo [3/5] Refresh actual data...
 "%PYBRONZE%" scripts\refresh_data.py
 if errorlevel 1 goto :error
 
-echo [3/4] Build models...
+echo [4/5] Build models...
 "%PYBRONZE%" scripts\build_models.py
 if errorlevel 1 goto :error
 
-echo [4/4] Commit data and model outputs...
+echo [5/5] Commit data and model outputs...
 git add -A
 git diff --cached --quiet
 if %errorlevel%==0 goto :done
-git commit -m "Clean rebuild and refresh banking liquidity intelligence"
+git commit -m "Upgrade CASA actual sources and interbank history"
 if errorlevel 1 goto :error
 git push origin main
 if errorlevel 1 goto :error

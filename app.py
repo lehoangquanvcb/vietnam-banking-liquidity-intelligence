@@ -92,7 +92,7 @@ with st.sidebar:
     st.write(f"Interbank model: **{summary.get('interbank',{}).get('status','NO_MODEL')}**")
     bs = summary.get("bank_stress", {})
     if bs:
-        st.caption(f"Stress lineage: {bs.get('bronze',0)} Bronze · {bs.get('hybrid',0)} Hybrid · {bs.get('fallback',0)} Fallback")
+        st.caption(f"Stress lineage: {bs.get('bronze',0)} Bronze · {bs.get('actual_mixed',0)} Actual mixed-source · {bs.get('hybrid',0)} Hybrid · {bs.get('fallback',0)} Fallback")
 
 
 def fan(history, forecast, col, title, ytitle, thresholds=False):
@@ -192,7 +192,7 @@ with tabs[3]:
             fig = px.bar(valid, x="Ticker", y="StressVulnerability", color="SourceMode", hover_data=["ActualMetricCount","MetricCoverage","FundingCostShock_ppt","StressedNIM","Watch"])
             fig.update_layout(height=430, yaxis_range=[0,105])
             st.plotly_chart(fig, use_container_width=True)
-            st.info(f"Lineage: {(valid.SourceMode=='BRONZE').sum()} Bronze · {(valid.SourceMode=='HYBRID').sum()} Hybrid · {(valid.SourceMode=='FALLBACK').sum()} Fallback")
+            st.info(f"Lineage: {(valid.SourceMode=='BRONZE').sum()} Bronze · {(valid.SourceMode=='ACTUAL_MIXED_SOURCE').sum()} Actual mixed-source · {(valid.SourceMode=='HYBRID').sum()} Hybrid · {(valid.SourceMode=='FALLBACK').sum()} Fallback")
         st.dataframe(safe(b[["Ticker","ActualMetricCount","MetricCoverage","BaseVulnerability","StressVulnerability","FundingCostShock_ppt","StressedNIM","Watch","DataType","SourceMode"]]), hide_index=True, use_container_width=True)
     else:
         st.warning("Chưa có bank_stress.csv. Hãy chạy RUN_UPDATE_AND_PUSH.bat.")
@@ -216,9 +216,9 @@ with tabs[5]:
     st.subheader("Model Diagnostics")
     if len(diag): st.dataframe(safe(diag), hide_index=True, use_container_width=True)
     st.subheader("Bank Data Quality")
-    st.caption("CASA ưu tiên tỷ lệ công bố trực tiếp từ Vnstock; nếu thiếu, hệ thống tự tính CASA = tiền gửi không kỳ hạn/demand deposits ÷ tiền gửi khách hàng. CASASource cho biết nguồn của từng ngân hàng.")
+    st.caption("CASA ưu tiên Vnstock trực tiếp; nếu Vnstock không có, hệ thống dùng CASA ACTUAL từ CASA_INPUT/public source. Nếu cả hai đều thiếu, model chỉ dùng assumption cho riêng CASA và vẫn gắn HYBRID. CASASource/CASASourceURL cho biết lineage.")
     if len(bank):
-        cols = [c for c in ["Ticker","LDR","CASA","CASASource","DemandDeposits","CustomerDeposits","InterbankDep","CreditDepositGap","NIM","ActualMetricCount","MetricCoverage","ParseStatus","ParserLog"] if c in bank.columns]
+        cols = [c for c in ["Ticker","LDR","CASA","CASASource","CASADataType","CASAPeriod","CASASourceName","CASASourceURL","DemandDeposits","CustomerDeposits","InterbankDep","CreditDepositGap","NIM","ActualMetricCount","MetricCoverage","ParseStatus","ParserLog"] if c in bank.columns]
         st.dataframe(safe(bank[cols]), hide_index=True, use_container_width=True)
     st.subheader("Refresh Log")
     if len(log): st.dataframe(safe(log), hide_index=True, use_container_width=True)

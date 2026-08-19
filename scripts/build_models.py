@@ -169,8 +169,20 @@ def bank_stress(lpi_fc):
                 row[c] = float(fb[c])
         row["ActualMetricCount"] = count
         row["MetricCoverage"] = count / 5
-        row["SourceMode"] = "BRONZE" if count == 5 else "HYBRID" if count > 0 else "FALLBACK"
-        row["DataType"] = "ACTUAL" if count == 5 else "MIXED" if count > 0 else "ASSUMPTION"
+        casa_source = str(act.get("CASASource","")) if act is not None else ""
+        if count == 5 and casa_source == "ACTUAL_PUBLIC_SOURCE":
+            row["SourceMode"] = "ACTUAL_MIXED_SOURCE"
+            row["DataType"] = "ACTUAL"
+        elif count == 5:
+            row["SourceMode"] = "BRONZE"
+            row["DataType"] = "ACTUAL"
+        elif count > 0:
+            row["SourceMode"] = "HYBRID"
+            row["DataType"] = "MIXED"
+        else:
+            row["SourceMode"] = "FALLBACK"
+            row["DataType"] = "ASSUMPTION"
+        row["CASASource"] = casa_source or "MODEL_ASSUMPTION"
         rows.append(row)
     bank = pd.DataFrame(rows)
     for c in fields:
@@ -198,9 +210,11 @@ lpi_fc, lpi_diag = forecast(panel["LPI"]) if "LPI" in panel else (pd.DataFrame()
 if len(lpi_fc):
     last = pd.to_datetime(panel["date"]).max(); lpi_fc["date"] = pd.bdate_range(last + pd.offsets.BDay(1), periods=len(lpi_fc))
     lpi_fc.to_csv(OUT / "lpi_forecast.csv", index=False, encoding="utf-8-sig")
-ib_fc, ib_diag = forecast(panel["interbank"]) if "interbank" in panel else (pd.DataFrame(), {"status":"NO_INTERBANK_DATA"})
+ib_actual = series("interbank.csv", "interbank", ["overnight_rate","overnight","rate"])
+ib_fc, ib_diag = forecast(ib_actual["interbank"]) if len(ib_actual) else (pd.DataFrame(), {"status":"NO_INTERBANK_DATA", "nobs":0})
 if len(ib_fc):
-    last = pd.to_datetime(panel["date"]).max(); ib_fc["date"] = pd.bdate_range(last + pd.offsets.BDay(1), periods=len(ib_fc))
+    last = pd.to_datetime(ib_actual["date"]).max()
+    ib_fc["date"] = pd.bdate_range(last + pd.offsets.BDay(1), periods=len(ib_fc))
     ib_fc.to_csv(OUT / "interbank_forecast.csv", index=False, encoding="utf-8-sig")
 reg, reg_diag = regime(panel) if "LPI" in panel else (pd.DataFrame(), {"status":"NO_LPI"})
 if len(reg): reg.to_csv(OUT / "regime.csv", index=False, encoding="utf-8-sig")
@@ -213,6 +227,7 @@ summary = {
     "bank_stress": {
         "valid_banks": int(stress[stress.Horizon == "Current"].BaseVulnerability.notna().sum()),
         "bronze": int((stress[stress.Horizon == "Current"].SourceMode == "BRONZE").sum()),
+        "actual_mixed": int((stress[stress.Horizon == "Current"].SourceMode == "ACTUAL_MIXED_SOURCE").sum()),
         "hybrid": int((stress[stress.Horizon == "Current"].SourceMode == "HYBRID").sum()),
         "fallback": int((stress[stress.Horizon == "Current"].SourceMode == "FALLBACK").sum()),
     },
