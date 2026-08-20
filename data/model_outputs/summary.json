@@ -12,7 +12,10 @@
   },
   "interbank": {
     "status": "INSUFFICIENT_HISTORY",
-    "nobs": 23
+    "nobs": 23,
+    "required_obs": 40,
+    "forecast_tier": "ACTUAL_ONLY",
+    "production_required_obs": 80
   },
   "regime": {
     "status": "OK",
@@ -26,5 +29,5 @@
     "hybrid": 0,
     "fallback": 0
   },
-  "generated_at": "2026-08-19T15:02:08.279348+07:00"
+  "generated_at": "2026-08-20T16:19:48.314973+07:00"
 }

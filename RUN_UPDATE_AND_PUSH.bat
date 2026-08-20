@@ -42,7 +42,7 @@ echo [5/5] Commit data and model outputs...
 git add -A
 git diff --cached --quiet
 if %errorlevel%==0 goto :done
-git commit -m "Upgrade CASA actual sources and interbank history"
+git commit -m "Accumulate interbank ACTUAL history and governed forecast tiers"
 if errorlevel 1 goto :error
 git push origin main
 if errorlevel 1 goto :error

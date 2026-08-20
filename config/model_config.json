@@ -8,5 +8,7 @@
   "bank_stress_beta_per_lpi": 0.15,
   "amber_threshold": 60,
   "red_threshold": 75,
-  "nim_red_threshold": 0.02
+  "nim_red_threshold": 0.02,
+  "min_interbank_exploratory_observations": 40,
+  "min_interbank_production_observations": 80
 }

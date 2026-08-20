@@ -93,11 +93,12 @@ def daily_panel():
     return d.reset_index()
 
 
-def forecast(y, h=20):
+def forecast(y, h=20, min_obs=None):
     values = pd.to_numeric(pd.Series(y), errors="coerce").dropna().values.astype(float)
     y = pd.Series(values, index=pd.RangeIndex(len(values)))
-    if len(y) < CFG["min_daily_observations"]:
-        return pd.DataFrame(), {"status": "INSUFFICIENT_HISTORY", "nobs": len(y)}
+    required = int(min_obs if min_obs is not None else CFG["min_daily_observations"])
+    if len(y) < required:
+        return pd.DataFrame(), {"status": "INSUFFICIENT_HISTORY", "nobs": len(y), "required_obs": required}
     test_n = min(CFG["backtest_days"], max(10, len(y) // 5))
     tr, te = y.iloc[:-test_n].copy(), y.iloc[-test_n:].copy()
     tr.index = pd.RangeIndex(len(tr)); te.index = pd.RangeIndex(len(te))
@@ -211,10 +212,33 @@ if len(lpi_fc):
     last = pd.to_datetime(panel["date"]).max(); lpi_fc["date"] = pd.bdate_range(last + pd.offsets.BDay(1), periods=len(lpi_fc))
     lpi_fc.to_csv(OUT / "lpi_forecast.csv", index=False, encoding="utf-8-sig")
 ib_actual = series("interbank.csv", "interbank", ["overnight_rate","overnight","rate"])
-ib_fc, ib_diag = forecast(ib_actual["interbank"]) if len(ib_actual) else (pd.DataFrame(), {"status":"NO_INTERBANK_DATA", "nobs":0})
+ib_n = len(ib_actual)
+ib_exploratory_min = int(CFG.get("min_interbank_exploratory_observations", 40))
+ib_production_min = int(CFG.get("min_interbank_production_observations", 80))
+if ib_n == 0:
+    ib_fc, ib_diag = pd.DataFrame(), {"status":"NO_INTERBANK_DATA", "nobs":0, "forecast_tier":"NONE"}
+elif ib_n < ib_exploratory_min:
+    ib_fc, ib_diag = pd.DataFrame(), {
+        "status":"INSUFFICIENT_HISTORY", "nobs":ib_n,
+        "required_obs":ib_exploratory_min, "forecast_tier":"ACTUAL_ONLY",
+        "production_required_obs":ib_production_min
+    }
+else:
+    ib_fc, ib_diag = forecast(ib_actual["interbank"], min_obs=ib_exploratory_min)
+    if ib_n < ib_production_min:
+        ib_diag["status"] = "EXPLORATORY_LOW_CONFIDENCE"
+        ib_diag["forecast_tier"] = "EXPLORATORY"
+        ib_diag["confidence"] = "LOW"
+        ib_diag["production_required_obs"] = ib_production_min
+        ib_diag["governance_note"] = "Exploratory only: fewer than production minimum observations."
+    else:
+        ib_diag["forecast_tier"] = "PRODUCTION"
+        ib_diag["production_required_obs"] = ib_production_min
+        ib_diag["governance_note"] = "Production-eligible history threshold met."
 if len(ib_fc):
     last = pd.to_datetime(ib_actual["date"]).max()
     ib_fc["date"] = pd.bdate_range(last + pd.offsets.BDay(1), periods=len(ib_fc))
+    ib_fc["ForecastTier"] = ib_diag.get("forecast_tier","UNKNOWN")
     ib_fc.to_csv(OUT / "interbank_forecast.csv", index=False, encoding="utf-8-sig")
 reg, reg_diag = regime(panel) if "LPI" in panel else (pd.DataFrame(), {"status":"NO_LPI"})
 if len(reg): reg.to_csv(OUT / "regime.csv", index=False, encoding="utf-8-sig")
@@ -235,8 +259,8 @@ summary = {
 }
 (OUT / "summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
 pd.DataFrame([
-    ["LPI", lpi_diag.get("status"), lpi_diag.get("model"), lpi_diag.get("nobs"), lpi_diag.get("rmse"), lpi_diag.get("naive_rmse"), lpi_diag.get("skill_vs_naive"), lpi_diag.get("confidence")],
-    ["Interbank ON", ib_diag.get("status"), ib_diag.get("model"), ib_diag.get("nobs"), ib_diag.get("rmse"), ib_diag.get("naive_rmse"), ib_diag.get("skill_vs_naive"), ib_diag.get("confidence")],
-    ["Liquidity Regime", reg_diag.get("status"), None, reg_diag.get("nobs"), None, None, None, None],
-], columns=["Target","Status","Model","Observations","RMSE","NaiveRMSE","SkillVsNaive","Confidence"]).to_csv(OUT / "diagnostics.csv", index=False, encoding="utf-8-sig")
+    ["LPI", lpi_diag.get("status"), lpi_diag.get("model"), lpi_diag.get("nobs"), lpi_diag.get("rmse"), lpi_diag.get("naive_rmse"), lpi_diag.get("skill_vs_naive"), lpi_diag.get("confidence"), "PRODUCTION", None],
+    ["Interbank ON", ib_diag.get("status"), ib_diag.get("model"), ib_diag.get("nobs"), ib_diag.get("rmse"), ib_diag.get("naive_rmse"), ib_diag.get("skill_vs_naive"), ib_diag.get("confidence"), ib_diag.get("forecast_tier"), ib_diag.get("production_required_obs")],
+    ["Liquidity Regime", reg_diag.get("status"), None, reg_diag.get("nobs"), None, None, None, None, "PRODUCTION", None],
+], columns=["Target","Status","Model","Observations","RMSE","NaiveRMSE","SkillVsNaive","Confidence","ForecastTier","ProductionMinObs"]).to_csv(OUT / "diagnostics.csv", index=False, encoding="utf-8-sig")
 print(json.dumps(summary, ensure_ascii=False, indent=2))

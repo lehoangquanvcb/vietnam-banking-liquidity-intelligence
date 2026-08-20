@@ -98,3 +98,13 @@ Nguồn: VietNamNet, bảng CASA tổng hợp từ BCTC bán niên 2026 của c�
 4. assumption chỉ khi cả ba nguồn trên đều không có.
 
 CASA từ public seed được gắn `ACTUAL_PUBLIC_SOURCE`; nếu 4 metric còn lại là Bronze ACTUAL thì stress lineage trở thành `ACTUAL_MIXED_SOURCE`, không gọi nhầm là BRONZE.
+
+
+## Interbank ON History Accumulator
+- `data/interbank_history.csv` is append-only canonical ACTUAL history.
+- Each refresh merges persisted history + fresh Vnstock + manual/public ACTUAL, then deduplicates by date.
+- Priority on duplicate dates: manual/public ACTUAL > fresh Vnstock > prior history.
+- 0–39 actual observations: ACTUAL_ONLY, no forecast.
+- 40–79: EXPLORATORY_LOW_CONFIDENCE forecast may be displayed, clearly labelled non-production.
+- >=80: production-eligible forecast; ARIMA must still beat naive holdout or benchmark is used.
+- The pipeline never forward-fills observations for the interbank forecast sample count.

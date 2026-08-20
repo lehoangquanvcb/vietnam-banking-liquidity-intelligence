@@ -87,9 +87,21 @@ with st.sidebar:
     else:
         st.warning("Chưa có bank_metrics.csv")
     ib = csv(DATA / "interbank.csv")
-    st.write(f"Interbank ACTUAL: **{len(ib)} quan sát**")
+    ib_obs = len(ib)
+    ib_expl = 40
+    ib_prod = 80
+    st.write(f"Interbank ACTUAL: **{ib_obs} quan sát**")
+    if ib_obs < ib_expl:
+        st.caption(f"Cần thêm {ib_expl-ib_obs} quan sát để mở forecast exploratory; {ib_prod-ib_obs} để đạt production.")
+    elif ib_obs < ib_prod:
+        st.caption(f"Đã đủ exploratory; cần thêm {ib_prod-ib_obs} quan sát để đạt production.")
+    else:
+        st.caption("Interbank history đã đạt ngưỡng production.")
     st.write(f"LPI model: **{summary.get('lpi',{}).get('status','NO_MODEL')}**")
-    st.write(f"Interbank model: **{summary.get('interbank',{}).get('status','NO_MODEL')}**")
+    ib_sum = summary.get("interbank", {})
+    st.write(f"Interbank model: **{ib_sum.get('status','NO_MODEL')}**")
+    if ib_sum.get("forecast_tier"):
+        st.caption(f"Forecast tier: {ib_sum.get('forecast_tier')}")
     bs = summary.get("bank_stress", {})
     if bs:
         st.caption(f"Stress lineage: {bs.get('bronze',0)} Bronze · {bs.get('actual_mixed',0)} Actual mixed-source · {bs.get('hybrid',0)} Hybrid · {bs.get('fallback',0)} Fallback")
@@ -169,11 +181,23 @@ with tabs[2]:
     if len(ib):
         ib["date"] = pd.to_datetime(ib.date, errors="coerce")
         ib["overnight_rate"] = pd.to_numeric(ib.overnight_rate, errors="coerce")
+        ib = ib.sort_values("date").drop_duplicates("date", keep="last")
+        ib_status = summary.get("interbank", {}).get("status")
+        ib_tier = summary.get("interbank", {}).get("forecast_tier", "ACTUAL_ONLY")
         if len(ib_fc):
             st.plotly_chart(fan(ib, ib_fc, "overnight_rate", "Interbank ON — Actual & Forecast", "%/năm"), use_container_width=True)
+            if ib_tier == "EXPLORATORY" or ib_status == "EXPLORATORY_LOW_CONFIDENCE":
+                st.warning("Forecast ON hiện chỉ ở mức EXPLORATORY / LOW CONFIDENCE vì lịch sử thực chưa đạt 80 quan sát. Không nên dùng như forecast production.")
+            else:
+                st.success("Interbank ON forecast đã đạt ngưỡng lịch sử production.")
         else:
-            st.plotly_chart(px.line(ib.tail(260), x="date", y="overnight_rate", title="Interbank ON — Actual"), use_container_width=True)
-            st.info("Đã có dữ liệu ON thực nhưng lịch sử chưa đủ hoặc model chưa đạt điều kiện forecast.")
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(x=ib.tail(260)["date"], y=ib.tail(260)["overnight_rate"], mode="lines+markers", name="Actual ON"))
+            fig.update_layout(title="Interbank ON — Actual", height=430, yaxis_title="%/năm", hovermode="x unified")
+            st.plotly_chart(fig, use_container_width=True)
+            need_exp = max(0, 40-len(ib)); need_prod = max(0, 80-len(ib))
+            st.info(f"Có {len(ib)} quan sát ON thực. Cần thêm {need_exp} để mở forecast exploratory và {need_prod} để đạt ngưỡng production.")
+        st.caption(f"Lịch sử đang tích lũy từ {ib['date'].min().date()} đến {ib['date'].max().date()}; mỗi lần refresh sẽ append + deduplicate, không xóa lịch sử cũ.")
     else:
         st.warning("Chưa lấy được Interbank ON từ Vnstock. App không thay thế bằng lãi suất tiền gửi/cho vay.")
         if len(log):

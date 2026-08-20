@@ -446,29 +446,90 @@ for name, fn, file in [
     except Exception as exc:
         status.append([name, "ERROR", str(exc)[:300], now()])
 
-ib, ib_source, ib_log = fetch_interbank(macro)
-if len(ib):
-    ib["SourceMode"] = "BRONZE"
-    ib["RetrievedAt"] = now()
-    ib.to_csv(DATA / "interbank.csv", index=False, encoding="utf-8-sig")
-    status.append(["interbank", "OK", f"source={ib_source}; obs={len(ib)}; {ib_log}", now()])
-else:
-    manual = DATA / "interbank_manual.csv"
-    if manual.exists():
+def normalize_interbank_frame(df, source_mode, source_detail, priority):
+    if df is None or len(df) == 0:
+        return pd.DataFrame()
+    x = flatten(df)
+    dc = find_col(x, ["date","time","report_time","datetime"])
+    vc = find_col(x, ["overnight_rate","overnight","rate_value","value","rate"])
+    if dc is None or vc is None:
+        return pd.DataFrame()
+    out = pd.DataFrame({
+        "date": pd.to_datetime(x[dc], errors="coerce"),
+        "overnight_rate": pd.to_numeric(x[vc], errors="coerce"),
+    })
+    out = out.dropna(subset=["date","overnight_rate"])
+    # Remove clearly impossible values but keep genuine spikes.
+    out = out[(out["overnight_rate"] >= 0) & (out["overnight_rate"] <= 50)].copy()
+    if out.empty:
+        return out
+    out["SourceMode"] = source_mode
+    out["SourceDetail"] = source_detail
+    out["RetrievedAt"] = now()
+    out["_priority"] = priority
+    return out
+
+
+def merge_interbank_history(new_actual, new_source, fetch_log):
+    """Append-only ACTUAL history with date de-duplication and source lineage."""
+    pieces = []
+    history_path = DATA / "interbank_history.csv"
+    legacy_path = DATA / "interbank.csv"
+    manual_path = DATA / "interbank_manual.csv"
+
+    # Existing accumulated history is never discarded merely because a refresh fails.
+    for path, label in [(history_path,"PERSISTED_HISTORY"),(legacy_path,"LEGACY_HISTORY")]:
+        if path.exists():
+            try:
+                old = pd.read_csv(path)
+                z = normalize_interbank_frame(old, "HISTORY", label, 1)
+                if len(z): pieces.append(z)
+            except Exception:
+                pass
+
+    # Fresh Vnstock ACTUAL supersedes stale history for the same date.
+    znew = normalize_interbank_frame(new_actual, "BRONZE", new_source, 2)
+    if len(znew): pieces.append(znew)
+
+    # User-supplied/public manual ACTUAL has highest de-dup priority because it is source-cited.
+    if manual_path.exists():
         try:
-            m = pd.read_csv(manual)
-            m["date"] = pd.to_datetime(m["date"], errors="coerce")
-            m["overnight_rate"] = pd.to_numeric(m["overnight_rate"], errors="coerce")
-            m = m.dropna(subset=["date", "overnight_rate"])
-            if len(m):
-                m.to_csv(DATA / "interbank.csv", index=False, encoding="utf-8-sig")
-                status.append(["interbank", "MANUAL_ACTUAL", f"obs={len(m)}; {ib_log}", now()])
-            else:
-                status.append(["interbank", "ERROR", ib_log, now()])
-        except Exception as exc:
-            status.append(["interbank", "ERROR", f"manual failed: {exc}; {ib_log}", now()])
-    else:
-        status.append(["interbank", "ERROR", ib_log, now()])
+            man = pd.read_csv(manual_path)
+            zman = normalize_interbank_frame(man, "MANUAL_ACTUAL", "MANUAL_PUBLIC_SOURCE", 3)
+            if len(zman): pieces.append(zman)
+        except Exception:
+            pass
+
+    if not pieces:
+        return pd.DataFrame(), "NO_ACTUAL_HISTORY"
+
+    hist = pd.concat(pieces, ignore_index=True, sort=False)
+    hist["date"] = pd.to_datetime(hist["date"], errors="coerce").dt.normalize()
+    hist["overnight_rate"] = pd.to_numeric(hist["overnight_rate"], errors="coerce")
+    hist = hist.dropna(subset=["date","overnight_rate"])
+    hist = hist.sort_values(["date","_priority","RetrievedAt"], na_position="first")
+    hist = hist.drop_duplicates("date", keep="last").sort_values("date")
+    hist["ObservationNo"] = range(1, len(hist)+1)
+    hist = hist.drop(columns=["_priority"], errors="ignore")
+    hist.to_csv(history_path, index=False, encoding="utf-8-sig")
+    # interbank.csv remains the canonical file consumed by models/app.
+    hist.to_csv(legacy_path, index=False, encoding="utf-8-sig")
+    return hist, "ACCUMULATED_ACTUAL_HISTORY"
+
+
+ib, ib_source, ib_log = fetch_interbank(macro)
+hist, hist_mode = merge_interbank_history(ib, ib_source, ib_log)
+if len(hist):
+    start = pd.to_datetime(hist["date"], errors="coerce").min()
+    end = pd.to_datetime(hist["date"], errors="coerce").max()
+    new_obs = len(normalize_interbank_frame(ib, "BRONZE", ib_source, 2)) if len(ib) else 0
+    status.append([
+        "interbank", "OK_ACCUMULATED",
+        f"history_obs={len(hist)}; new_fetch_obs={new_obs}; start={start.date() if pd.notna(start) else ''}; end={end.date() if pd.notna(end) else ''}; source={ib_source}; {ib_log}",
+        now()
+    ])
+else:
+    status.append(["interbank", "ERROR", f"No ACTUAL history after merge; {ib_log}", now()])
 
 pd.DataFrame(status, columns=["dataset", "status", "message", "RetrievedAt"]).to_csv(DATA / "refresh_log.csv", index=False, encoding="utf-8-sig")
 print(pd.DataFrame(status, columns=["dataset", "status", "message", "RetrievedAt"]).to_string(index=False))
