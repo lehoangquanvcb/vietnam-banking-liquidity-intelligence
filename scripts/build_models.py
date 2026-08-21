@@ -274,6 +274,134 @@ def forecast_interbank_governed(y, h=20, min_obs=18):
     diag.update(extra)
     return fc,diag,comp
 
+
+def _forecast_shape_metrics(values, model_name, h=20):
+    """Economic-usefulness diagnostics without changing statistical champion."""
+    try:
+        fc, _ = _final_candidate_forecast(values, model_name, h)
+        current = float(values[-1])
+        f1 = float(fc.iloc[0]["forecast"])
+        f5 = float(fc.iloc[min(4, len(fc)-1)]["forecast"])
+        f20 = float(fc.iloc[min(19, len(fc)-1)]["forecast"])
+        path = pd.to_numeric(fc["forecast"], errors="coerce").dropna()
+        path_range = float(path.max() - path.min()) if len(path) else np.nan
+        directional_move = float(f20 - current)
+        return {
+            "Forecast1D": f1, "Forecast5D": f5, "Forecast20D": f20,
+            "DirectionalMove20D": directional_move,
+            "ForecastPathRange": path_range,
+            # Flatness here means "same forecast across horizons", which is what matters
+            # for dashboard information content. A level shift from current to a constant
+            # future mean is still a flat term structure.
+            "IsFlat": bool(path_range < 0.10),
+        }
+    except Exception:
+        return {
+            "Forecast1D": np.nan, "Forecast5D": np.nan, "Forecast20D": np.nan,
+            "DirectionalMove20D": np.nan, "ForecastPathRange": np.nan, "IsFlat": False,
+        }
+
+
+def select_directional_challenger(values, comp, champion, h=20, tolerance=1.15):
+    """
+    Challenger is NOT the production champion.
+    It is shown only when:
+    - it beats naive;
+    - its RMSE is within tolerance of champion;
+    - it produces a non-trivial directional path.
+    """
+    if comp is None or comp.empty:
+        return pd.DataFrame(), pd.DataFrame(), {}
+    c = comp.copy()
+    champion_row = c[c["Model"] == champion]
+    if champion_row.empty:
+        return pd.DataFrame(), pd.DataFrame(), {}
+    champion_rmse = float(champion_row.iloc[0]["RMSE"])
+    naive_row = c[c["Model"] == "NAIVE_RANDOM_WALK"]
+    naive_rmse = float(naive_row.iloc[0]["RMSE"]) if len(naive_row) else np.inf
+
+    shape_rows = []
+    for m in c["Model"].astype(str):
+        sm = _forecast_shape_metrics(values, m, h)
+        sm["Model"] = m
+        shape_rows.append(sm)
+    shape = pd.DataFrame(shape_rows)
+    c = c.merge(shape, on="Model", how="left")
+
+    eligible = c[
+        (c["Model"] != champion)
+        & (pd.to_numeric(c["RMSE"], errors="coerce") < naive_rmse)
+        & (pd.to_numeric(c["RMSE"], errors="coerce") <= champion_rmse * tolerance)
+        & (~c["IsFlat"].fillna(False))
+        & (pd.to_numeric(c["DirectionalMove20D"], errors="coerce").abs() >= 0.15)
+    ].copy()
+
+    if eligible.empty:
+        return pd.DataFrame(), c, {}
+    eligible["DirectionalUtilityScore"] = (
+        pd.to_numeric(eligible["SkillVsNaive"], errors="coerce").fillna(0)
+        + 0.05 * pd.to_numeric(eligible["DirectionalMove20D"], errors="coerce").abs()
+    )
+    challenger = eligible.sort_values(["RMSE", "DirectionalUtilityScore"], ascending=[True, False]).iloc[0]
+    m = str(challenger["Model"])
+    fc, extra = _final_candidate_forecast(values, m, h)
+    info = {
+        "model": m,
+        "rmse": float(challenger["RMSE"]),
+        "mae": float(challenger["MAE"]),
+        "skill_vs_naive": float(challenger["SkillVsNaive"]),
+        "forecast_20d": float(challenger["Forecast20D"]),
+        "directional_move_20d": float(challenger["DirectionalMove20D"]),
+        "rmse_premium_vs_champion": float(challenger["RMSE"] / champion_rmse - 1),
+        "role": "DIRECTIONAL_CHALLENGER",
+    }
+    info.update(extra)
+    return fc, c, info
+
+
+def interbank_market_state(values):
+    """Descriptive market state from ACTUAL observations only."""
+    x = pd.to_numeric(pd.Series(values), errors="coerce").dropna().astype(float)
+    if len(x) == 0:
+        return {}
+    current = float(x.iloc[-1])
+    mean = float(x.mean())
+    median = float(x.median())
+    vol = float(x.diff().dropna().std()) if len(x) > 2 else None
+    level_vol = float(x.std()) if len(x) > 1 else None
+    recent3 = float(x.tail(min(3,len(x))).mean())
+    recent5 = float(x.tail(min(5,len(x))).mean())
+    pct = float((x <= current).mean())
+    q25 = float(x.quantile(.25)); q75 = float(x.quantile(.75))
+    if current >= q75:
+        regime = "TIGHT"
+        regime_vi = "Căng"
+    elif current <= q25:
+        regime = "EASY"
+        regime_vi = "Dễ chịu"
+    else:
+        regime = "NORMAL"
+        regime_vi = "Trung tính"
+    if recent3 > recent5 + 0.30:
+        momentum = "RISING"
+        momentum_vi = "Đang tăng"
+    elif recent3 < recent5 - 0.30:
+        momentum = "FALLING"
+        momentum_vi = "Đang giảm"
+    else:
+        momentum = "STABLE"
+        momentum_vi = "Đi ngang"
+    return {
+        "current": current, "mean": mean, "median": median,
+        "recent3_mean": recent3, "recent5_mean": recent5,
+        "change_volatility": vol, "level_volatility": level_vol,
+        "current_percentile": pct, "q25": q25, "q75": q75,
+        "market_regime": regime, "market_regime_vi": regime_vi,
+        "momentum": momentum, "momentum_vi": momentum_vi,
+    }
+
+
+
 def regime(panel):
     x = panel[["date","LPI"]].dropna().copy()
     if len(x) < CFG["min_markov_observations"]:
@@ -370,17 +498,60 @@ elif ib_n < ib_exploratory_min:
         "production_required_obs":ib_production_min
     }
 else:
-    ib_fc, ib_diag, ib_comp = forecast_interbank_governed(ib_actual["interbank"], h=CFG.get("forecast_horizon_business_days",20), min_obs=ib_exploratory_min)
+    ib_values = pd.to_numeric(ib_actual["interbank"], errors="coerce").dropna().values.astype(float)
+    ib_fc, ib_diag, ib_comp = forecast_interbank_governed(
+        ib_actual["interbank"],
+        h=CFG.get("forecast_horizon_business_days",20),
+        min_obs=ib_exploratory_min
+    )
+
+    # Statistical champion remains selected by rolling RMSE.
+    champion = ib_diag.get("model")
+    challenger_fc, enriched_comp, challenger_info = select_directional_challenger(
+        ib_values, ib_comp, champion,
+        h=CFG.get("forecast_horizon_business_days",20),
+        tolerance=float(CFG.get("interbank_challenger_rmse_tolerance",1.15))
+    )
+    if len(enriched_comp):
+        ib_comp = enriched_comp
+        ib_comp["Role"] = np.select(
+            [ib_comp["Model"].eq(champion), ib_comp["Model"].eq(challenger_info.get("model"))],
+            ["STATISTICAL_CHAMPION","DIRECTIONAL_CHALLENGER"],
+            default="CANDIDATE"
+        )
+    market_state = interbank_market_state(ib_values)
+    ib_diag["market_state"] = market_state
+    ib_diag["challenger"] = challenger_info
+    ib_diag["champion_is_flat"] = bool(
+        len(ib_comp)
+        and ib_comp.loc[ib_comp["Model"].eq(champion), "IsFlat"].fillna(False).astype(bool).any()
+    )
+
     if ib_n < ib_production_min:
         ib_diag["status"] = "EXPLORATORY_LOW_CONFIDENCE"
         ib_diag["forecast_tier"] = "EXPLORATORY"
         ib_diag["confidence"] = "LOW"
         ib_diag["production_required_obs"] = ib_production_min
-        ib_diag["governance_note"] = "Exploratory only: history is below production threshold. Candidate selected by rolling-origin RMSE; do not use as production forecast."
+        ib_diag["governance_note"] = (
+            "Exploratory only: history is below production threshold. "
+            "Statistical Champion is selected by rolling-origin RMSE. "
+            "Directional Challenger is informational only and never replaces the champion."
+        )
     else:
         ib_diag["forecast_tier"] = "PRODUCTION"
         ib_diag["production_required_obs"] = ib_production_min
-        ib_diag["governance_note"] = "Production history threshold met; candidate selected by rolling-origin RMSE versus naive benchmark."
+        ib_diag["governance_note"] = (
+            "Production history threshold met; Statistical Champion selected by rolling-origin RMSE versus naive. "
+            "Directional Challenger remains secondary."
+        )
+
+    if len(challenger_fc):
+        last = pd.to_datetime(ib_actual["date"]).max()
+        challenger_fc["date"] = pd.bdate_range(last + pd.offsets.BDay(1), periods=len(challenger_fc))
+        challenger_fc["ForecastTier"] = ib_diag.get("forecast_tier","UNKNOWN")
+        challenger_fc["SelectedModel"] = challenger_info.get("model","UNKNOWN")
+        challenger_fc.to_csv(OUT / "interbank_challenger_forecast.csv", index=False, encoding="utf-8-sig")
+
 if len(ib_comp):
     ib_comp.to_csv(OUT / "interbank_model_comparison.csv", index=False, encoding="utf-8-sig")
 if len(ib_fc):

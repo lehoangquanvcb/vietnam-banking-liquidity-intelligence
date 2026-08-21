@@ -15,8 +15,11 @@ st.markdown("""
 <style>
 .block-container{padding-top:2.5rem;padding-bottom:2rem}
 h1{font-size:clamp(1.55rem,2.2vw,2.15rem)!important;line-height:1.3!important;margin:.1rem 0 .6rem!important}
-[data-testid="stMetricValue"]{font-size:1.4rem}
+[data-testid="stMetricValue"]{font-size:1.35rem}
+[data-testid="stMetricLabel"]{font-weight:650}
 div[data-testid="stTabs"] button{white-space:nowrap}
+div[data-testid="stMetric"]{padding:.35rem .15rem}
+hr{margin:.7rem 0 1rem}
 </style>
 """, unsafe_allow_html=True)
 
@@ -88,6 +91,54 @@ def interbank_interpretation(current, forecast20, diag_info):
     return f"Mô hình {model} dự báo ON 20D {direction} ({delta:+.2f} điểm %); {meaning}. Tier={tier}{skill_text}."
 
 
+def interbank_liquidity_message(ib_info, current, champion20, challenger20=None):
+    ms = ib_info.get("market_state", {}) if isinstance(ib_info, dict) else {}
+    regime = ms.get("market_regime_vi", "Chưa xác định")
+    momentum = ms.get("momentum_vi", "Chưa xác định")
+    pct = num(ms.get("current_percentile"))
+    vol = num(ms.get("change_volatility"))
+
+    messages=[]
+    if pct is not None:
+        if pct >= .75:
+            messages.append(f"ON hiện tại nằm quanh percentile {pct:.0%} của lịch sử ACTUAL — mặt bằng đang ở vùng cao tương đối.")
+        elif pct <= .25:
+            messages.append(f"ON hiện tại nằm quanh percentile {pct:.0%} — mặt bằng đang ở vùng thấp tương đối.")
+        else:
+            messages.append(f"ON hiện tại nằm quanh percentile {pct:.0%} — chưa phải vùng cực đoan của lịch sử ACTUAL.")
+    messages.append(f"Trạng thái mô tả: **{regime}**; động lượng gần đây: **{momentum}**.")
+    if vol is not None:
+        messages.append(f"Độ biến động thay đổi ON giữa các quan sát khoảng **{vol:.2f} điểm %**.")
+
+    if current is not None and champion20 is not None:
+        d = champion20-current
+        if d <= -.5:
+            messages.append("Champion nghiêng về **hạ nhiệt funding pressure** trong 20D.")
+        elif d >= .5:
+            messages.append("Champion nghiêng về **gia tăng funding pressure** trong 20D.")
+        else:
+            messages.append("Champion chưa cho tín hiệu thay đổi mạnh về funding pressure trong 20D.")
+
+    if challenger20 is not None and champion20 is not None:
+        dc = challenger20-current if current is not None else None
+        if dc is not None and abs(challenger20-champion20) >= .5:
+            messages.append(
+                "Champion và Challenger đang phân kỳ đáng kể; đây là dấu hiệu **model uncertainty cao**, "
+                "nên ưu tiên quản trị theo dải kịch bản thay vì một điểm forecast."
+            )
+        else:
+            messages.append("Champion và Challenger tương đối đồng thuận về hướng đi.")
+    return " ".join(messages)
+
+
+def model_role_badge(role):
+    if role == "STATISTICAL_CHAMPION":
+        return "🏆 Statistical Champion"
+    if role == "DIRECTIONAL_CHALLENGER":
+        return "🧭 Directional Challenger"
+    return "Candidate"
+
+
 bank = csv(DATA / "bank_metrics.csv")
 log = csv(DATA / "refresh_log.csv")
 panel = csv(OUT / "daily_panel.csv")
@@ -99,6 +150,7 @@ diag = csv(OUT / "diagnostics.csv")
 summary = js(OUT / "summary.json")
 cfg = js(ROOT / "config" / "model_config.json")
 ib_comp = csv(OUT / "interbank_model_comparison.csv")
+ib_challenger_fc = csv(OUT / "interbank_challenger_forecast.csv")
 
 lpi_hist = pd.to_numeric(panel["LPI"], errors="coerce").dropna() if len(panel) and "LPI" in panel.columns else pd.Series(dtype=float)
 cur = num(lpi_hist.iloc[-1]) if len(lpi_hist) else None
@@ -207,32 +259,156 @@ with tabs[2]:
     st.subheader("Lãi suất liên ngân hàng qua đêm")
     ib = csv(DATA / "interbank.csv")
     ib_info = summary.get("interbank", {})
+
     if len(ib):
         ib["date"] = pd.to_datetime(ib.date, errors="coerce")
         ib["overnight_rate"] = pd.to_numeric(ib.overnight_rate, errors="coerce")
         ib = ib.dropna(subset=["date","overnight_rate"]).sort_values("date").drop_duplicates("date", keep="last")
+
         ib_status = ib_info.get("status")
         ib_tier = ib_info.get("forecast_tier", "ACTUAL_ONLY")
         current_on = num(ib.iloc[-1]["overnight_rate"]) if len(ib) else None
+        champion = ib_info.get("model","N/A")
+        challenger_info = ib_info.get("challenger", {}) if isinstance(ib_info.get("challenger", {}), dict) else {}
+        challenger = challenger_info.get("model")
+        champion_flat = bool(ib_info.get("champion_is_flat", False))
 
+        def fc_at(df,h):
+            return num(df.iloc[h-1]["forecast"]) if len(df) >= h else None
+
+        c1,c2,c3,c4,c5,c6 = st.columns(6)
+        c1.metric("ON hiện tại", f"{current_on:.2f}%" if current_on is not None else "N/A")
+        c2.metric("Champion", champion)
+        c3.metric("Dự báo 5D", f"{fc_at(ib_fc,5):.2f}%" if fc_at(ib_fc,5) is not None else "N/A")
+        c4.metric("Dự báo 20D", f"{fc_at(ib_fc,20):.2f}%" if fc_at(ib_fc,20) is not None else "N/A")
+        c5.metric("Challenger", challenger or "Không có")
+        c6.metric("Tier", ib_tier)
+
+        # Executive interpretation strip.
+        champ20=fc_at(ib_fc,20)
+        chall20=fc_at(ib_challenger_fc,20)
         if len(ib_fc):
-            # KPI forecast horizons.
-            def fc_at(h):
-                return num(ib_fc.iloc[h-1]["forecast"]) if len(ib_fc) >= h else None
-            v1,v5,v10,v20 = fc_at(1),fc_at(5),fc_at(10),fc_at(20)
-            k1,k2,k3,k4,k5 = st.columns(5)
-            k1.metric("ON hiện tại", f"{current_on:.2f}%" if current_on is not None else "N/A")
-            k2.metric("Dự báo 1D", f"{v1:.2f}%" if v1 is not None else "N/A", delta=f"{v1-current_on:+.2f} ppt" if v1 is not None and current_on is not None else None)
-            k3.metric("Dự báo 5D", f"{v5:.2f}%" if v5 is not None else "N/A", delta=f"{v5-current_on:+.2f} ppt" if v5 is not None and current_on is not None else None)
-            k4.metric("Dự báo 10D", f"{v10:.2f}%" if v10 is not None else "N/A", delta=f"{v10-current_on:+.2f} ppt" if v10 is not None and current_on is not None else None)
-            k5.metric("Dự báo 20D", f"{v20:.2f}%" if v20 is not None else "N/A", delta=f"{v20-current_on:+.2f} ppt" if v20 is not None and current_on is not None else None)
+            if champion_flat and challenger:
+                st.warning(
+                    f"**{champion}** là Statistical Champion theo rolling RMSE nhưng forecast khá phẳng. "
+                    f"Dashboard giữ nguyên Champion để đảm bảo governance và hiển thị **{challenger}** như Directional Challenger, "
+                    "không dùng Challenger để thay thế kết quả chính."
+                )
+            elif champion_flat:
+                st.info(
+                    f"**{champion}** là Champion và đang tạo forecast phẳng. Không có Challenger nào vừa đủ khác biệt về hướng đi "
+                    "vừa đạt tiêu chuẩn RMSE; hệ thống không ép một model kém hơn chỉ để tạo đường forecast đẹp."
+                )
+            else:
+                st.success(f"Champion **{champion}** vừa tốt hơn benchmark vừa tạo đường forecast có thông tin hướng đi.")
 
-            st.plotly_chart(fan(ib, ib_fc, "overnight_rate", "Interbank ON — Actual & Governed Forecast", "%/năm"), use_container_width=True)
+        # Actual + champion fan + challenger overlay.
+        fig = fan(ib, ib_fc, "overnight_rate", "Interbank ON — Actual, Champion & Risk Bands", "%/năm")
+        if len(ib_challenger_fc):
+            cf=ib_challenger_fc.copy()
+            cf["date"]=pd.to_datetime(cf["date"],errors="coerce")
+            cf["forecast"]=pd.to_numeric(cf["forecast"],errors="coerce")
+            fig.add_trace(go.Scatter(
+                x=cf["date"],y=cf["forecast"],mode="lines+markers",
+                name=f"Challenger: {challenger}",line=dict(width=2,dash="dot")
+            ))
+        st.plotly_chart(fig,use_container_width=True)
 
-            # Horizon table with uncertainty.
+        # Term structure comparison.
+        if len(ib_fc):
+            st.markdown("### Term structure dự báo")
+            horizons=[1,5,10,20]
+            term=[]
+            for h in horizons:
+                term.append({
+                    "Horizon":f"{h}D",
+                    "Champion":fc_at(ib_fc,h),
+                    "Challenger":fc_at(ib_challenger_fc,h),
+                    "Current":current_on,
+                })
+            termdf=pd.DataFrame(term)
+            left,right=st.columns([1.25,1])
+            with left:
+                tf=go.Figure()
+                tf.add_trace(go.Scatter(x=termdf.Horizon,y=termdf.Champion,mode="lines+markers",name=f"Champion: {champion}",line=dict(width=3)))
+                if termdf.Challenger.notna().any():
+                    tf.add_trace(go.Scatter(x=termdf.Horizon,y=termdf.Challenger,mode="lines+markers",name=f"Challenger: {challenger}",line=dict(width=2,dash="dot")))
+                if current_on is not None:
+                    tf.add_hline(y=current_on,line_dash="dash",opacity=.4,annotation_text="ON hiện tại")
+                tf.update_layout(height=330,yaxis_title="%/năm",legend_orientation="h",margin=dict(l=20,r=20,t=35,b=20))
+                st.plotly_chart(tf,use_container_width=True)
+            with right:
+                display=termdf.copy()
+                display["Δ Champion"]=display["Champion"]-current_on if current_on is not None else np.nan
+                display["Δ Challenger"]=display["Challenger"]-current_on if current_on is not None else np.nan
+                st.dataframe(
+                    display.style.format({
+                        "Champion":"{:.2f}","Challenger":"{:.2f}","Current":"{:.2f}",
+                        "Δ Champion":"{:+.2f}","Δ Challenger":"{:+.2f}"
+                    }),
+                    hide_index=True,use_container_width=True
+                )
+
+        # Market regime / risk state.
+        st.markdown("### Trạng thái thị trường & hàm ý thanh khoản")
+        ms=ib_info.get("market_state",{}) if isinstance(ib_info.get("market_state",{}),dict) else {}
+        r1,r2,r3,r4=st.columns(4)
+        pct=num(ms.get("current_percentile"))
+        vol=num(ms.get("change_volatility"))
+        r1.metric("Regime", ms.get("market_regime_vi","N/A"))
+        r2.metric("Momentum", ms.get("momentum_vi","N/A"))
+        r3.metric("Percentile hiện tại", f"{pct:.0%}" if pct is not None else "N/A")
+        r4.metric("Volatility ΔON", f"{vol:.2f} ppt" if vol is not None else "N/A")
+        st.info(interbank_liquidity_message(ib_info,current_on,champ20,chall20))
+
+        # Model governance scorecard.
+        st.markdown("### Champion–Challenger Model Scorecard")
+        if len(ib_comp):
+            comp=ib_comp.copy()
+            for c in ["RMSE","MAE","SkillVsNaive","Forecast1D","Forecast5D","Forecast20D","DirectionalMove20D","ForecastPathRange"]:
+                if c in comp.columns:
+                    comp[c]=pd.to_numeric(comp[c],errors="coerce")
+            if "Role" not in comp.columns:
+                comp["Role"]=np.where(comp.get("Selected",False),"STATISTICAL_CHAMPION","CANDIDATE")
+            comp["Vai trò"]=comp["Role"].map(model_role_badge)
+
+            g1,g2=st.columns([1,1.2])
+            with g1:
+                b=comp.sort_values("RMSE",ascending=True).copy()
+                figm=px.bar(
+                    b,x="RMSE",y="Model",orientation="h",color="Role",
+                    hover_data=["MAE","SkillVsNaive","DirectionalMove20D"] if "DirectionalMove20D" in b.columns else ["MAE","SkillVsNaive"],
+                    title="Rolling-origin RMSE — càng thấp càng tốt"
+                )
+                figm.update_layout(height=430,yaxis={"categoryorder":"total descending"})
+                st.plotly_chart(figm,use_container_width=True)
+            with g2:
+                cols=[c for c in ["Vai trò","Model","RMSE","MAE","SkillVsNaive","Forecast20D","DirectionalMove20D","IsFlat","RollingPoints"] if c in comp.columns]
+                st.dataframe(
+                    safe(comp.sort_values("RMSE")[cols]),
+                    hide_index=True,use_container_width=True,height=430
+                )
+
+            skill=num(ib_info.get("skill_vs_naive")); rmse=num(ib_info.get("rmse")); naive=num(ib_info.get("naive_rmse"))
+            champion_msg = (
+                f"**Statistical Champion: {champion}.** "
+                + (f"Rolling RMSE {rmse:.3f} so với Naive {naive:.3f}; Skill vs Naive {skill:.1%}. " if rmse is not None and naive is not None and skill is not None else "")
+            )
+            if challenger:
+                prem=num(challenger_info.get("rmse_premium_vs_champion"))
+                champion_msg += (
+                    f"**Directional Challenger: {challenger}**"
+                    + (f", RMSE cao hơn Champion {prem:.1%}" if prem is not None else "")
+                    + ". Challenger chỉ dùng để đọc hướng/rủi ro mô hình, không thay Champion."
+                )
+            st.write(champion_msg)
+
+        # Horizon uncertainty table.
+        if len(ib_fc):
+            st.markdown("### Dải dự báo Champion")
             rows=[]
             for h,label in [(1,"1D"),(5,"5D"),(10,"10D"),(20,"20D")]:
-                if len(ib_fc) >= h:
+                if len(ib_fc)>=h:
                     r=ib_fc.iloc[h-1]
                     rows.append({
                         "Horizon":label,
@@ -243,46 +419,34 @@ with tabs[2]:
                         "Tier":ib_tier,
                     })
             htab=pd.DataFrame(rows)
-            if len(htab):
-                st.markdown("#### Bảng dự báo theo kỳ hạn")
-                st.dataframe(htab.style.format({"Forecast":"{:.2f}","80% Low":"{:.2f}","80% High":"{:.2f}","95% Low":"{:.2f}","95% High":"{:.2f}","Δ vs Current":"{:+.2f}"}), hide_index=True, use_container_width=True)
-
-            st.markdown("#### Giải thích kết quả")
-            st.info(interbank_interpretation(current_on, v20, ib_info))
-            model_name=ib_info.get("model","N/A")
-            skill=num(ib_info.get("skill_vs_naive"))
-            rmse=num(ib_info.get("rmse")); naive_rmse=num(ib_info.get("naive_rmse"))
-            st.write(
-                f"**Mô hình được chọn:** {model_name}. Hệ thống so sánh Naive, Historical Mean, Mean-Reversion AR(1), ETS và các ARIMA bằng **rolling-origin one-step RMSE**. "
-                + (f"RMSE={rmse:.3f} so với Naive={naive_rmse:.3f}; Skill vs Naive={skill:.1%}. " if rmse is not None and naive_rmse is not None and skill is not None else "")
-                + "Mô hình phức tạp chỉ được chọn khi có hiệu quả tốt hơn benchmark."
+            st.dataframe(
+                htab.style.format({
+                    "Forecast":"{:.2f}","80% Low":"{:.2f}","80% High":"{:.2f}",
+                    "95% Low":"{:.2f}","95% High":"{:.2f}","Δ vs Current":"{:+.2f}"
+                }),
+                hide_index=True,use_container_width=True
             )
 
-            if len(ib_comp):
-                st.markdown("#### So sánh mô hình")
-                comp=ib_comp.copy()
-                for c in ["RMSE","MAE","SkillVsNaive"]:
-                    if c in comp.columns: comp[c]=pd.to_numeric(comp[c],errors="coerce")
-                st.dataframe(safe(comp.sort_values("RMSE")), hide_index=True, use_container_width=True)
-
-            if ib_tier == "EXPLORATORY" or ib_status == "EXPLORATORY_LOW_CONFIDENCE":
-                st.warning(f"Forecast ON đang ở mức EXPLORATORY / LOW CONFIDENCE vì mới có {len(ib)} quan sát ACTUAL, dưới ngưỡng production {int(cfg.get('min_interbank_production_observations',60))}. Dùng để tham khảo xu hướng, không dùng như forecast production.")
-            else:
-                st.success("Interbank ON forecast đã đạt ngưỡng lịch sử production và vẫn phải vượt naive benchmark theo governance.")
+        # Governance notice.
+        if ib_tier=="EXPLORATORY" or ib_status=="EXPLORATORY_LOW_CONFIDENCE":
+            st.warning(
+                f"Forecast ON vẫn là **EXPLORATORY / LOW CONFIDENCE** vì mới có {len(ib)} quan sát ACTUAL, "
+                f"dưới ngưỡng production {int(cfg.get('min_interbank_production_observations',60))}. "
+                "Champion–Challenger giúp đọc model risk tốt hơn nhưng không làm tăng chất lượng dữ liệu nền."
+            )
         else:
-            fig = go.Figure()
-            fig.add_trace(go.Scatter(x=ib.tail(260)["date"], y=ib.tail(260)["overnight_rate"], mode="lines+markers", name="Actual ON"))
-            fig.update_layout(title="Interbank ON — Actual", height=430, yaxis_title="%/năm", hovermode="x unified")
-            st.plotly_chart(fig, use_container_width=True)
-            exp_min=int(cfg.get("min_interbank_exploratory_observations",18)); prod_min=int(cfg.get("min_interbank_production_observations",60))
-            need_exp=max(0,exp_min-len(ib)); need_prod=max(0,prod_min-len(ib))
-            st.info(f"Có {len(ib)} quan sát ON thực. Cần thêm {need_exp} để mở forecast exploratory và {need_prod} để đạt ngưỡng production. Không nội suy dữ liệu giả để tăng số quan sát.")
-        st.caption(f"Lịch sử ACTUAL hiện có từ {ib['date'].min().date()} đến {ib['date'].max().date()}; mỗi lần refresh append + deduplicate, không xóa lịch sử cũ.")
+            st.success("Interbank ON forecast đã đạt ngưỡng lịch sử production và Champion vẫn phải vượt Naive theo governance.")
+
+        st.caption(
+            f"Lịch sử ACTUAL từ {ib['date'].min().date()} đến {ib['date'].max().date()}; "
+            "refresh append + deduplicate, không xóa lịch sử cũ."
+        )
     else:
         st.warning("Chưa lấy được Interbank ON từ Vnstock. App không thay thế bằng lãi suất tiền gửi/cho vay.")
         if len(log):
-            z = log[log.dataset.astype(str).str.contains("interbank", case=False, na=False)]
-            if len(z): st.dataframe(safe(z), hide_index=True, use_container_width=True)
+            z=log[log.dataset.astype(str).str.contains("interbank",case=False,na=False)]
+            if len(z):
+                st.dataframe(safe(z),hide_index=True,use_container_width=True)
 
 with tabs[3]:
     st.subheader("Funding Stress theo ngân hàng")

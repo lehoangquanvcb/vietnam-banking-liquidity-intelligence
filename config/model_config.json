@@ -21,5 +21,9 @@
     "ARIMA(2,0,0)",
     "ARIMA(1,1,0)",
     "ARIMA(0,1,1)"
-  ]
+  ],
+  "interbank_challenger_rmse_tolerance": 1.22,
+  "interbank_flat_move_threshold_ppt": 0.15,
+  "interbank_directional_min_move_ppt": 0.15,
+  "interbank_flat_path_threshold_ppt": 0.1
 }

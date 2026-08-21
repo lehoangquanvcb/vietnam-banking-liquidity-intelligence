@@ -23,9 +23,38 @@
     "rolling_test_points": 5,
     "candidate_count": 8,
     "long_run_mean": 4.639565217391304,
+    "market_state": {
+      "current": 5.72,
+      "mean": 4.639565217391304,
+      "median": 4.1,
+      "recent3_mean": 2.6,
+      "recent5_mean": 4.803999999999999,
+      "change_volatility": 4.047703560360382,
+      "level_volatility": 3.0345188000449244,
+      "current_percentile": 0.8260869565217391,
+      "q25": 2.615,
+      "q75": 5.380000000000001,
+      "market_regime": "TIGHT",
+      "market_regime_vi": "Căng",
+      "momentum": "FALLING",
+      "momentum_vi": "Đang giảm"
+    },
+    "challenger": {
+      "model": "ARIMA(1,0,0)",
+      "rmse": 5.231713232159567,
+      "mae": 4.563758552865062,
+      "skill_vs_naive": 0.23981116499065813,
+      "forecast_20d": 4.783470029882126,
+      "directional_move_20d": -0.9365299701178733,
+      "rmse_premium_vs_champion": 0.2043652067669155,
+      "role": "DIRECTIONAL_CHALLENGER",
+      "aic": 116.09604675410674,
+      "bic": 119.36917411418169
+    },
+    "champion_is_flat": true,
     "forecast_tier": "EXPLORATORY",
     "production_required_obs": 60,
-    "governance_note": "Exploratory only: history is below production threshold. Candidate selected by rolling-origin RMSE; do not use as production forecast."
+    "governance_note": "Exploratory only: history is below production threshold. Statistical Champion is selected by rolling-origin RMSE. Directional Challenger is informational only and never replaces the champion."
   },
   "regime": {
     "status": "OK",
@@ -39,5 +68,5 @@
     "hybrid": 0,
     "fallback": 0
   },
-  "generated_at": "2026-08-21T09:36:36.334766+07:00"
+  "generated_at": "2026-08-21T10:09:43.348400+07:00"
 }

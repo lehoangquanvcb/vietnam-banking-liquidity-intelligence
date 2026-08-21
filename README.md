@@ -31,3 +31,25 @@ Interbank ON no longer relies on a single ARIMA family. Candidate models:
 Selection uses expanding-window rolling-origin one-step RMSE. A complex candidate is not published unless it beats the naive benchmark. Output `data/model_outputs/interbank_model_comparison.csv` preserves candidate RMSE/MAE/Skill vs Naive and selection flag.
 
 The Streamlit Interbank tab shows 1D/5D/10D/20D forecasts, 80%/95% intervals, selected model, diagnostics, Vietnamese interpretation and model-comparison table. Exploratory forecasts remain LOW CONFIDENCE below the production history threshold.
+
+
+## Interbank Intelligence Dashboard — Champion / Challenger
+
+Dashboard distinguishes two different questions:
+
+- **Statistical Champion**: lowest rolling-origin one-step RMSE. This remains the governed primary forecast.
+- **Directional Challenger**: a non-flat term-structure candidate that still beats Naive and has RMSE within a controlled tolerance of the Champion. It is informational only.
+
+This prevents the system from replacing a statistically superior flat forecast merely because another model draws a more interesting line.
+
+The dashboard now shows:
+- ON current level;
+- 1D / 5D / 10D / 20D Champion term structure;
+- Directional Challenger path;
+- 80% / 95% Champion intervals;
+- rolling RMSE / MAE / Skill vs Naive;
+- market regime, momentum, percentile and actual-rate volatility;
+- Vietnamese liquidity interpretation;
+- explicit model-risk warning when Champion and Challenger disagree.
+
+Current governance with 23 ACTUAL observations remains EXPLORATORY / LOW CONFIDENCE.
