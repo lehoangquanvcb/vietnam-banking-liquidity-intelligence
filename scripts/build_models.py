@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 from sklearn.metrics import mean_squared_error
 from statsmodels.tsa.statespace.sarimax import SARIMAX
+from statsmodels.tsa.holtwinters import SimpleExpSmoothing
 from statsmodels.tsa.regime_switching.markov_regression import MarkovRegression
 
 warnings.filterwarnings("ignore")
@@ -129,6 +130,150 @@ def forecast(y, h=20, min_obs=None):
     return out, {"status":"OK", "model":name, "nobs":len(y), "rmse":rmse, "naive_rmse":naive_rmse, "skill_vs_naive":skill, "confidence":conf, "aic":float(final.aic), "bic":float(final.bic)}
 
 
+
+def _mean_reversion_params(train):
+    a = np.asarray(train, dtype=float)
+    if len(a) < 4:
+        return float(np.mean(a)), 0.0, float(np.std(np.diff(a))) if len(a) > 1 else 0.0
+    x, y = a[:-1], a[1:]
+    X = np.column_stack([np.ones(len(x)), x])
+    try:
+        beta = np.linalg.lstsq(X, y, rcond=None)[0]
+        intercept, phi = float(beta[0]), float(np.clip(beta[1], -0.98, 0.98))
+    except Exception:
+        phi = 0.0; intercept = float(np.mean(a))
+    residual = y - (intercept + phi * x)
+    sigma = float(np.std(residual, ddof=1)) if len(residual) > 1 else float(np.std(np.diff(a)))
+    long_mean = intercept / (1 - phi) if abs(phi) < .98 else float(np.mean(a))
+    return float(long_mean), phi, max(sigma, 1e-6)
+
+
+def _one_step_candidate(train, model_name):
+    train = np.asarray(train, dtype=float)
+    if model_name == "NAIVE_RANDOM_WALK":
+        return float(train[-1])
+    if model_name == "HISTORICAL_MEAN":
+        return float(np.mean(train))
+    if model_name == "MEAN_REVERSION_AR1":
+        long_mean, phi, _ = _mean_reversion_params(train)
+        return float(long_mean + phi * (train[-1] - long_mean))
+    if model_name == "ETS_SIMPLE":
+        fit = SimpleExpSmoothing(pd.Series(train, index=pd.RangeIndex(len(train))), initialization_method="estimated").fit(optimized=True)
+        return float(np.asarray(fit.forecast(1))[0])
+    if model_name.startswith("ARIMA"):
+        order_map = {
+            "ARIMA(1,0,0)": (1,0,0), "ARIMA(2,0,0)": (2,0,0),
+            "ARIMA(1,1,0)": (1,1,0), "ARIMA(0,1,1)": (0,1,1),
+        }
+        order = order_map[model_name]
+        s = pd.Series(train, index=pd.RangeIndex(len(train)))
+        fit = SARIMAX(s, order=order, trend="c" if order[1] == 0 else "n", enforce_stationarity=False, enforce_invertibility=False).fit(disp=False)
+        return float(np.asarray(fit.get_forecast(1).predicted_mean)[0])
+    raise ValueError(model_name)
+
+
+def _final_candidate_forecast(values, model_name, h):
+    values = np.asarray(values, dtype=float)
+    hs = np.arange(1, h + 1)
+    if model_name == "NAIVE_RANDOM_WALK":
+        fc = np.repeat(float(values[-1]), h)
+        sigma = max(float(pd.Series(values).diff().dropna().std()), 1e-6)
+        se = sigma * np.sqrt(hs)
+        extra = {}
+    elif model_name == "HISTORICAL_MEAN":
+        mu = float(np.mean(values)); fc = np.repeat(mu, h)
+        sigma = max(float(np.std(values - mu, ddof=1)), 1e-6)
+        se = np.repeat(sigma * np.sqrt(1 + 1/len(values)), h)
+        extra = {"long_run_mean": mu}
+    elif model_name == "MEAN_REVERSION_AR1":
+        long_mean, phi, sigma = _mean_reversion_params(values)
+        f=[]; prev=float(values[-1])
+        for _ in hs:
+            prev = long_mean + phi * (prev - long_mean); f.append(prev)
+        fc=np.asarray(f)
+        if abs(phi) < .999:
+            se=np.asarray([sigma*np.sqrt(sum(phi**(2*j) for j in range(k))) for k in hs])
+        else:
+            se=sigma*np.sqrt(hs)
+        extra={"long_run_mean":long_mean,"mean_reversion_phi":phi}
+    elif model_name == "ETS_SIMPLE":
+        s=pd.Series(values,index=pd.RangeIndex(len(values)))
+        fit=SimpleExpSmoothing(s, initialization_method="estimated").fit(optimized=True)
+        fc=np.asarray(fit.forecast(h),dtype=float)
+        residual=np.asarray(fit.resid,dtype=float)
+        sigma=max(float(np.nanstd(residual,ddof=1)),1e-6)
+        se=sigma*np.sqrt(hs)
+        extra={"smoothing_level":float(fit.params.get("smoothing_level",np.nan))}
+    else:
+        order_map = {
+            "ARIMA(1,0,0)": (1,0,0), "ARIMA(2,0,0)": (2,0,0),
+            "ARIMA(1,1,0)": (1,1,0), "ARIMA(0,1,1)": (0,1,1),
+        }
+        order=order_map[model_name]
+        s=pd.Series(values,index=pd.RangeIndex(len(values)))
+        fit=SARIMAX(s,order=order,trend="c" if order[1]==0 else "n",enforce_stationarity=False,enforce_invertibility=False).fit(disp=False)
+        pred=fit.get_forecast(h)
+        fc=np.asarray(pred.predicted_mean,dtype=float)
+        ci80=pred.conf_int(alpha=.20); ci95=pred.conf_int(alpha=.05)
+        out=pd.DataFrame({"horizon":hs,"forecast":fc,"p10":np.asarray(ci80.iloc[:,0]),"p90":np.asarray(ci80.iloc[:,1]),"p025":np.asarray(ci95.iloc[:,0]),"p975":np.asarray(ci95.iloc[:,1])})
+        return out,{"aic":float(fit.aic),"bic":float(fit.bic)}
+    out=pd.DataFrame({"horizon":hs,"forecast":fc,"p10":fc-1.2816*se,"p90":fc+1.2816*se,"p025":fc-1.96*se,"p975":fc+1.96*se})
+    return out,extra
+
+
+def forecast_interbank_governed(y, h=20, min_obs=18):
+    values = pd.to_numeric(pd.Series(y), errors="coerce").dropna().values.astype(float)
+    n=len(values)
+    if n < min_obs:
+        return pd.DataFrame(), {"status":"INSUFFICIENT_HISTORY","nobs":n,"required_obs":min_obs}, pd.DataFrame()
+    # Expanding-window rolling-origin 1-step evaluation; preserve enough observations for model fitting.
+    test_n=min(max(5,n//4), 10)
+    start=max(8,n-test_n)
+    models=["NAIVE_RANDOM_WALK","HISTORICAL_MEAN","MEAN_REVERSION_AR1","ETS_SIMPLE","ARIMA(1,0,0)","ARIMA(2,0,0)","ARIMA(1,1,0)","ARIMA(0,1,1)"]
+    errors={m:[] for m in models}
+    abs_errors={m:[] for m in models}
+    for i in range(start,n):
+        train=values[:i]; actual=float(values[i])
+        for m in models:
+            try:
+                pred=_one_step_candidate(train,m)
+                errors[m].append((actual-pred)**2)
+                abs_errors[m].append(abs(actual-pred))
+            except Exception:
+                pass
+    rows=[]
+    naive_rmse=None
+    for m in models:
+        k=len(errors[m])
+        if not k: continue
+        rmse=float(np.sqrt(np.mean(errors[m]))); mae=float(np.mean(abs_errors[m]))
+        if m=="NAIVE_RANDOM_WALK": naive_rmse=rmse
+        rows.append({"Model":m,"RollingPoints":k,"RMSE":rmse,"MAE":mae})
+    comp=pd.DataFrame(rows)
+    if comp.empty:
+        return pd.DataFrame(),{"status":"MODEL_ERROR","nobs":n},comp
+    if naive_rmse is None:
+        naive_rmse=float(comp.RMSE.max())
+    comp["SkillVsNaive"]=1-comp["RMSE"]/naive_rmse if naive_rmse>0 else np.nan
+    best=comp.sort_values(["RMSE","MAE"]).iloc[0]
+    winner=str(best.Model)
+    # Governance: a complex model must beat naive; otherwise publish naive.
+    if winner != "NAIVE_RANDOM_WALK" and float(best.RMSE) >= naive_rmse:
+        winner="NAIVE_RANDOM_WALK"
+        best=comp[comp.Model==winner].iloc[0]
+    comp["Selected"]=comp.Model.eq(winner)
+    fc,extra=_final_candidate_forecast(values,winner,h)
+    skill=float(1-float(best.RMSE)/naive_rmse) if naive_rmse>0 else None
+    confidence="HIGH" if skill is not None and skill>=.20 else "MEDIUM" if skill is not None and skill>=.05 else "LOW"
+    diag={
+        "status":"OK","model":winner,"nobs":n,"rmse":float(best.RMSE),"mae":float(best.MAE),
+        "naive_rmse":float(naive_rmse),"skill_vs_naive":skill,"confidence":confidence,
+        "selection_basis":"ROLLING_ORIGIN_1STEP_RMSE","rolling_test_points":int(best.RollingPoints),
+        "candidate_count":int(len(comp)),
+    }
+    diag.update(extra)
+    return fc,diag,comp
+
 def regime(panel):
     x = panel[["date","LPI"]].dropna().copy()
     if len(x) < CFG["min_markov_observations"]:
@@ -213,8 +358,9 @@ if len(lpi_fc):
     lpi_fc.to_csv(OUT / "lpi_forecast.csv", index=False, encoding="utf-8-sig")
 ib_actual = series("interbank.csv", "interbank", ["overnight_rate","overnight","rate"])
 ib_n = len(ib_actual)
-ib_exploratory_min = int(CFG.get("min_interbank_exploratory_observations", 40))
-ib_production_min = int(CFG.get("min_interbank_production_observations", 80))
+ib_exploratory_min = int(CFG.get("min_interbank_exploratory_observations", 18))
+ib_production_min = int(CFG.get("min_interbank_production_observations", 60))
+ib_comp = pd.DataFrame()
 if ib_n == 0:
     ib_fc, ib_diag = pd.DataFrame(), {"status":"NO_INTERBANK_DATA", "nobs":0, "forecast_tier":"NONE"}
 elif ib_n < ib_exploratory_min:
@@ -224,24 +370,24 @@ elif ib_n < ib_exploratory_min:
         "production_required_obs":ib_production_min
     }
 else:
-    ib_fc, ib_diag = forecast(ib_actual["interbank"], min_obs=ib_exploratory_min)
+    ib_fc, ib_diag, ib_comp = forecast_interbank_governed(ib_actual["interbank"], h=CFG.get("forecast_horizon_business_days",20), min_obs=ib_exploratory_min)
     if ib_n < ib_production_min:
         ib_diag["status"] = "EXPLORATORY_LOW_CONFIDENCE"
         ib_diag["forecast_tier"] = "EXPLORATORY"
         ib_diag["confidence"] = "LOW"
         ib_diag["production_required_obs"] = ib_production_min
-        ib_diag["governance_note"] = "Exploratory only: fewer than production minimum observations."
+        ib_diag["governance_note"] = "Exploratory only: history is below production threshold. Candidate selected by rolling-origin RMSE; do not use as production forecast."
     else:
         ib_diag["forecast_tier"] = "PRODUCTION"
         ib_diag["production_required_obs"] = ib_production_min
-        ib_diag["governance_note"] = "Production-eligible history threshold met."
+        ib_diag["governance_note"] = "Production history threshold met; candidate selected by rolling-origin RMSE versus naive benchmark."
+if len(ib_comp):
+    ib_comp.to_csv(OUT / "interbank_model_comparison.csv", index=False, encoding="utf-8-sig")
 if len(ib_fc):
     last = pd.to_datetime(ib_actual["date"]).max()
-    # Vnstock Bronze currently returns sparse ON observations. Forecast horizon is
-    # business-day forward from the latest ACTUAL point; ACTUAL observations are
-    # never interpolated or relabelled as observed data.
     ib_fc["date"] = pd.bdate_range(last + pd.offsets.BDay(1), periods=len(ib_fc))
     ib_fc["ForecastTier"] = ib_diag.get("forecast_tier","UNKNOWN")
+    ib_fc["SelectedModel"] = ib_diag.get("model","UNKNOWN")
     ib_fc.to_csv(OUT / "interbank_forecast.csv", index=False, encoding="utf-8-sig")
 reg, reg_diag = regime(panel) if "LPI" in panel else (pd.DataFrame(), {"status":"NO_LPI"})
 if len(reg): reg.to_csv(OUT / "regime.csv", index=False, encoding="utf-8-sig")
@@ -262,8 +408,8 @@ summary = {
 }
 (OUT / "summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
 pd.DataFrame([
-    ["LPI", lpi_diag.get("status"), lpi_diag.get("model"), lpi_diag.get("nobs"), lpi_diag.get("rmse"), lpi_diag.get("naive_rmse"), lpi_diag.get("skill_vs_naive"), lpi_diag.get("confidence"), "PRODUCTION", None],
-    ["Interbank ON", ib_diag.get("status"), ib_diag.get("model"), ib_diag.get("nobs"), ib_diag.get("rmse"), ib_diag.get("naive_rmse"), ib_diag.get("skill_vs_naive"), ib_diag.get("confidence"), ib_diag.get("forecast_tier"), ib_diag.get("production_required_obs")],
-    ["Liquidity Regime", reg_diag.get("status"), None, reg_diag.get("nobs"), None, None, None, None, "PRODUCTION", None],
-], columns=["Target","Status","Model","Observations","RMSE","NaiveRMSE","SkillVsNaive","Confidence","ForecastTier","ProductionMinObs"]).to_csv(OUT / "diagnostics.csv", index=False, encoding="utf-8-sig")
+    ["LPI", lpi_diag.get("status"), lpi_diag.get("model"), lpi_diag.get("nobs"), lpi_diag.get("rmse"), lpi_diag.get("naive_rmse"), lpi_diag.get("skill_vs_naive"), lpi_diag.get("confidence"), "PRODUCTION", None, "HOLDOUT_RMSE", None],
+    ["Interbank ON", ib_diag.get("status"), ib_diag.get("model"), ib_diag.get("nobs"), ib_diag.get("rmse"), ib_diag.get("naive_rmse"), ib_diag.get("skill_vs_naive"), ib_diag.get("confidence"), ib_diag.get("forecast_tier"), ib_diag.get("production_required_obs"), ib_diag.get("selection_basis"), ib_diag.get("rolling_test_points")],
+    ["Liquidity Regime", reg_diag.get("status"), None, reg_diag.get("nobs"), None, None, None, None, "PRODUCTION", None, None, None],
+], columns=["Target","Status","Model","Observations","RMSE","NaiveRMSE","SkillVsNaive","Confidence","ForecastTier","ProductionMinObs","SelectionBasis","RollingTestPoints"]).to_csv(OUT / "diagnostics.csv", index=False, encoding="utf-8-sig")
 print(json.dumps(summary, ensure_ascii=False, indent=2))

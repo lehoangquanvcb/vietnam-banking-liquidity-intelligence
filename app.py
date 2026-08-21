@@ -62,6 +62,32 @@ def state(v):
     return "Dư thừa"
 
 
+def interbank_interpretation(current, forecast20, diag_info):
+    if current is None or forecast20 is None:
+        return "Chưa đủ dữ liệu để diễn giải hướng lãi suất liên ngân hàng."
+    delta = forecast20 - current
+    if delta >= 1.0:
+        direction = "tăng đáng kể"
+        meaning = "hàm ý áp lực funding ngắn hạn có xu hướng gia tăng nếu các điều kiện khác không đổi"
+    elif delta >= .3:
+        direction = "tăng nhẹ"
+        meaning = "hàm ý thanh khoản có thể bớt thuận lợi hơn"
+    elif delta <= -1.0:
+        direction = "giảm đáng kể"
+        meaning = "hàm ý áp lực funding ngắn hạn có thể hạ nhiệt"
+    elif delta <= -.3:
+        direction = "giảm nhẹ"
+        meaning = "hàm ý điều kiện thanh khoản có thể thuận lợi hơn"
+    else:
+        direction = "đi ngang"
+        meaning = "hàm ý mô hình chưa thấy thay đổi đáng kể so với mức ON gần nhất"
+    model = diag_info.get("model", "N/A")
+    skill = num(diag_info.get("skill_vs_naive"))
+    skill_text = f"; Skill vs Naive {skill:.1%}" if skill is not None else ""
+    tier = diag_info.get("forecast_tier", "N/A")
+    return f"Mô hình {model} dự báo ON 20D {direction} ({delta:+.2f} điểm %); {meaning}. Tier={tier}{skill_text}."
+
+
 bank = csv(DATA / "bank_metrics.csv")
 log = csv(DATA / "refresh_log.csv")
 panel = csv(OUT / "daily_panel.csv")
@@ -71,6 +97,8 @@ regime = csv(OUT / "regime.csv")
 stress = csv(OUT / "bank_stress.csv")
 diag = csv(OUT / "diagnostics.csv")
 summary = js(OUT / "summary.json")
+cfg = js(ROOT / "config" / "model_config.json")
+ib_comp = csv(OUT / "interbank_model_comparison.csv")
 
 lpi_hist = pd.to_numeric(panel["LPI"], errors="coerce").dropna() if len(panel) and "LPI" in panel.columns else pd.Series(dtype=float)
 cur = num(lpi_hist.iloc[-1]) if len(lpi_hist) else None
@@ -88,13 +116,13 @@ with st.sidebar:
         st.warning("Chưa có bank_metrics.csv")
     ib = csv(DATA / "interbank.csv")
     ib_obs = len(ib)
-    ib_expl = 40
-    ib_prod = 80
+    ib_expl = int(cfg.get("min_interbank_exploratory_observations", 18))
+    ib_prod = int(cfg.get("min_interbank_production_observations", 60))
     st.write(f"Interbank ACTUAL: **{ib_obs} quan sát**")
     if ib_obs < ib_expl:
-        st.caption(f"Cần thêm {ib_expl-ib_obs} quan sát để mở forecast exploratory; {ib_prod-ib_obs} để đạt production.")
+        st.caption(f"Forecast exploratory chưa mở: cần thêm {ib_expl-ib_obs} quan sát; cần thêm {ib_prod-ib_obs} để đạt production.")
     elif ib_obs < ib_prod:
-        st.caption(f"Đã đủ exploratory; cần thêm {ib_prod-ib_obs} quan sát để đạt production.")
+        st.caption(f"Forecast exploratory: ĐÃ MỞ · cần thêm {ib_prod-ib_obs} quan sát để đạt production ({ib_prod}).")
     else:
         st.caption("Interbank history đã đạt ngưỡng production.")
     st.write(f"LPI model: **{summary.get('lpi',{}).get('status','NO_MODEL')}**")
@@ -178,26 +206,78 @@ with tabs[1]:
 with tabs[2]:
     st.subheader("Lãi suất liên ngân hàng qua đêm")
     ib = csv(DATA / "interbank.csv")
+    ib_info = summary.get("interbank", {})
     if len(ib):
         ib["date"] = pd.to_datetime(ib.date, errors="coerce")
         ib["overnight_rate"] = pd.to_numeric(ib.overnight_rate, errors="coerce")
-        ib = ib.sort_values("date").drop_duplicates("date", keep="last")
-        ib_status = summary.get("interbank", {}).get("status")
-        ib_tier = summary.get("interbank", {}).get("forecast_tier", "ACTUAL_ONLY")
+        ib = ib.dropna(subset=["date","overnight_rate"]).sort_values("date").drop_duplicates("date", keep="last")
+        ib_status = ib_info.get("status")
+        ib_tier = ib_info.get("forecast_tier", "ACTUAL_ONLY")
+        current_on = num(ib.iloc[-1]["overnight_rate"]) if len(ib) else None
+
         if len(ib_fc):
-            st.plotly_chart(fan(ib, ib_fc, "overnight_rate", "Interbank ON — Actual & Forecast", "%/năm"), use_container_width=True)
+            # KPI forecast horizons.
+            def fc_at(h):
+                return num(ib_fc.iloc[h-1]["forecast"]) if len(ib_fc) >= h else None
+            v1,v5,v10,v20 = fc_at(1),fc_at(5),fc_at(10),fc_at(20)
+            k1,k2,k3,k4,k5 = st.columns(5)
+            k1.metric("ON hiện tại", f"{current_on:.2f}%" if current_on is not None else "N/A")
+            k2.metric("Dự báo 1D", f"{v1:.2f}%" if v1 is not None else "N/A", delta=f"{v1-current_on:+.2f} ppt" if v1 is not None and current_on is not None else None)
+            k3.metric("Dự báo 5D", f"{v5:.2f}%" if v5 is not None else "N/A", delta=f"{v5-current_on:+.2f} ppt" if v5 is not None and current_on is not None else None)
+            k4.metric("Dự báo 10D", f"{v10:.2f}%" if v10 is not None else "N/A", delta=f"{v10-current_on:+.2f} ppt" if v10 is not None and current_on is not None else None)
+            k5.metric("Dự báo 20D", f"{v20:.2f}%" if v20 is not None else "N/A", delta=f"{v20-current_on:+.2f} ppt" if v20 is not None and current_on is not None else None)
+
+            st.plotly_chart(fan(ib, ib_fc, "overnight_rate", "Interbank ON — Actual & Governed Forecast", "%/năm"), use_container_width=True)
+
+            # Horizon table with uncertainty.
+            rows=[]
+            for h,label in [(1,"1D"),(5,"5D"),(10,"10D"),(20,"20D")]:
+                if len(ib_fc) >= h:
+                    r=ib_fc.iloc[h-1]
+                    rows.append({
+                        "Horizon":label,
+                        "Forecast":num(r.get("forecast")),
+                        "80% Low":num(r.get("p10")),"80% High":num(r.get("p90")),
+                        "95% Low":num(r.get("p025")),"95% High":num(r.get("p975")),
+                        "Δ vs Current":num(r.get("forecast"))-current_on if current_on is not None and num(r.get("forecast")) is not None else None,
+                        "Tier":ib_tier,
+                    })
+            htab=pd.DataFrame(rows)
+            if len(htab):
+                st.markdown("#### Bảng dự báo theo kỳ hạn")
+                st.dataframe(htab.style.format({"Forecast":"{:.2f}","80% Low":"{:.2f}","80% High":"{:.2f}","95% Low":"{:.2f}","95% High":"{:.2f}","Δ vs Current":"{:+.2f}"}), hide_index=True, use_container_width=True)
+
+            st.markdown("#### Giải thích kết quả")
+            st.info(interbank_interpretation(current_on, v20, ib_info))
+            model_name=ib_info.get("model","N/A")
+            skill=num(ib_info.get("skill_vs_naive"))
+            rmse=num(ib_info.get("rmse")); naive_rmse=num(ib_info.get("naive_rmse"))
+            st.write(
+                f"**Mô hình được chọn:** {model_name}. Hệ thống so sánh Naive, Historical Mean, Mean-Reversion AR(1), ETS và các ARIMA bằng **rolling-origin one-step RMSE**. "
+                + (f"RMSE={rmse:.3f} so với Naive={naive_rmse:.3f}; Skill vs Naive={skill:.1%}. " if rmse is not None and naive_rmse is not None and skill is not None else "")
+                + "Mô hình phức tạp chỉ được chọn khi có hiệu quả tốt hơn benchmark."
+            )
+
+            if len(ib_comp):
+                st.markdown("#### So sánh mô hình")
+                comp=ib_comp.copy()
+                for c in ["RMSE","MAE","SkillVsNaive"]:
+                    if c in comp.columns: comp[c]=pd.to_numeric(comp[c],errors="coerce")
+                st.dataframe(safe(comp.sort_values("RMSE")), hide_index=True, use_container_width=True)
+
             if ib_tier == "EXPLORATORY" or ib_status == "EXPLORATORY_LOW_CONFIDENCE":
-                st.warning("Forecast ON hiện chỉ ở mức EXPLORATORY / LOW CONFIDENCE vì lịch sử ACTUAL còn thưa/chưa đạt ngưỡng production 60 quan sát. Không nên dùng như forecast production.")
+                st.warning(f"Forecast ON đang ở mức EXPLORATORY / LOW CONFIDENCE vì mới có {len(ib)} quan sát ACTUAL, dưới ngưỡng production {int(cfg.get('min_interbank_production_observations',60))}. Dùng để tham khảo xu hướng, không dùng như forecast production.")
             else:
-                st.success("Interbank ON forecast đã đạt ngưỡng lịch sử production.")
+                st.success("Interbank ON forecast đã đạt ngưỡng lịch sử production và vẫn phải vượt naive benchmark theo governance.")
         else:
             fig = go.Figure()
             fig.add_trace(go.Scatter(x=ib.tail(260)["date"], y=ib.tail(260)["overnight_rate"], mode="lines+markers", name="Actual ON"))
             fig.update_layout(title="Interbank ON — Actual", height=430, yaxis_title="%/năm", hovermode="x unified")
             st.plotly_chart(fig, use_container_width=True)
-            need_exp = max(0, 18-len(ib)); need_prod = max(0, 60-len(ib))
+            exp_min=int(cfg.get("min_interbank_exploratory_observations",18)); prod_min=int(cfg.get("min_interbank_production_observations",60))
+            need_exp=max(0,exp_min-len(ib)); need_prod=max(0,prod_min-len(ib))
             st.info(f"Có {len(ib)} quan sát ON thực. Cần thêm {need_exp} để mở forecast exploratory và {need_prod} để đạt ngưỡng production. Không nội suy dữ liệu giả để tăng số quan sát.")
-        st.caption(f"Lịch sử đang tích lũy từ {ib['date'].min().date()} đến {ib['date'].max().date()}; mỗi lần refresh sẽ append + deduplicate, không xóa lịch sử cũ.")
+        st.caption(f"Lịch sử ACTUAL hiện có từ {ib['date'].min().date()} đến {ib['date'].max().date()}; mỗi lần refresh append + deduplicate, không xóa lịch sử cũ.")
     else:
         st.warning("Chưa lấy được Interbank ON từ Vnstock. App không thay thế bằng lãi suất tiền gửi/cho vay.")
         if len(log):

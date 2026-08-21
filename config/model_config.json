@@ -10,5 +10,16 @@
   "red_threshold": 75,
   "nim_red_threshold": 0.02,
   "min_interbank_exploratory_observations": 18,
-  "min_interbank_production_observations": 60
+  "min_interbank_production_observations": 60,
+  "interbank_model_selection": "rolling_origin_one_step_rmse",
+  "interbank_candidate_models": [
+    "NAIVE_RANDOM_WALK",
+    "HISTORICAL_MEAN",
+    "MEAN_REVERSION_AR1",
+    "ETS_SIMPLE",
+    "ARIMA(1,0,0)",
+    "ARIMA(2,0,0)",
+    "ARIMA(1,1,0)",
+    "ARIMA(0,1,1)"
+  ]
 }

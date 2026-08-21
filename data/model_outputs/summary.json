@@ -12,17 +12,20 @@
   },
   "interbank": {
     "status": "EXPLORATORY_LOW_CONFIDENCE",
-    "model": "ARIMA(2,0,0)",
+    "model": "HISTORICAL_MEAN",
     "nobs": 23,
-    "rmse": 4.202775256555404,
-    "naive_rmse": 4.754545193811917,
-    "skill_vs_naive": 0.11605104479281136,
+    "rmse": 4.343959126986036,
+    "mae": 3.514769324827219,
+    "naive_rmse": 6.8821232188911,
+    "skill_vs_naive": 0.368805383335469,
     "confidence": "LOW",
-    "aic": 113.33470152501243,
-    "bic": 117.51279127590612,
+    "selection_basis": "ROLLING_ORIGIN_1STEP_RMSE",
+    "rolling_test_points": 5,
+    "candidate_count": 8,
+    "long_run_mean": 4.639565217391304,
     "forecast_tier": "EXPLORATORY",
     "production_required_obs": 60,
-    "governance_note": "Exploratory only: fewer than production minimum observations."
+    "governance_note": "Exploratory only: history is below production threshold. Candidate selected by rolling-origin RMSE; do not use as production forecast."
   },
   "regime": {
     "status": "OK",
@@ -36,5 +39,5 @@
     "hybrid": 0,
     "fallback": 0
   },
-  "generated_at": "2026-08-21T09:17:08.284050+07:00"
+  "generated_at": "2026-08-21T09:36:36.334766+07:00"
 }

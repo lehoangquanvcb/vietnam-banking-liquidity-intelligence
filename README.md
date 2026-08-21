@@ -18,3 +18,16 @@ Pipeline sẽ:
 
 ## Streamlit
 Khuyến nghị Python 3.12. Streamlit Cloud không cần cài hoặc gọi Vnstock Sponsor/Bronze tại runtime.
+
+
+## Governed Interbank Model Selection
+Interbank ON no longer relies on a single ARIMA family. Candidate models:
+- Naive random walk
+- Historical mean
+- Mean-reversion AR(1)
+- Simple ETS
+- ARIMA(1,0,0), ARIMA(2,0,0), ARIMA(1,1,0), ARIMA(0,1,1)
+
+Selection uses expanding-window rolling-origin one-step RMSE. A complex candidate is not published unless it beats the naive benchmark. Output `data/model_outputs/interbank_model_comparison.csv` preserves candidate RMSE/MAE/Skill vs Naive and selection flag.
+
+The Streamlit Interbank tab shows 1D/5D/10D/20D forecasts, 80%/95% intervals, selected model, diagnostics, Vietnamese interpretation and model-comparison table. Exploratory forecasts remain LOW CONFIDENCE below the production history threshold.
