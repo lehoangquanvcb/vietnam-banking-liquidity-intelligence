@@ -99,7 +99,7 @@ def forecast(y, h=20, min_obs=None):
     required = int(min_obs if min_obs is not None else CFG["min_daily_observations"])
     if len(y) < required:
         return pd.DataFrame(), {"status": "INSUFFICIENT_HISTORY", "nobs": len(y), "required_obs": required}
-    test_n = min(CFG["backtest_days"], max(10, len(y) // 5))
+    test_n = min(CFG["backtest_days"], max(5, len(y) // 4))
     tr, te = y.iloc[:-test_n].copy(), y.iloc[-test_n:].copy()
     tr.index = pd.RangeIndex(len(tr)); te.index = pd.RangeIndex(len(te))
     naive = np.repeat(float(tr.iloc[-1]), len(te))
@@ -237,6 +237,9 @@ else:
         ib_diag["governance_note"] = "Production-eligible history threshold met."
 if len(ib_fc):
     last = pd.to_datetime(ib_actual["date"]).max()
+    # Vnstock Bronze currently returns sparse ON observations. Forecast horizon is
+    # business-day forward from the latest ACTUAL point; ACTUAL observations are
+    # never interpolated or relabelled as observed data.
     ib_fc["date"] = pd.bdate_range(last + pd.offsets.BDay(1), periods=len(ib_fc))
     ib_fc["ForecastTier"] = ib_diag.get("forecast_tier","UNKNOWN")
     ib_fc.to_csv(OUT / "interbank_forecast.csv", index=False, encoding="utf-8-sig")

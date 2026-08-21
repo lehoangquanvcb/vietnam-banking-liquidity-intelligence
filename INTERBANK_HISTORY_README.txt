@@ -1,12 +1,8 @@
-INTERBANK ON HISTORY UPGRADE
+INTERBANK ON - GOVERNANCE
 
-- KEEP your existing data/ folder.
-- Every RUN_UPDATE_AND_PUSH.bat run now merges:
-  existing interbank history + fresh Vnstock ACTUAL + manual/public ACTUAL.
-- Same-date priority: manual/public > fresh Vnstock > old history.
-- History is deduplicated by date and saved to:
-  data/interbank_history.csv
-  data/interbank.csv
-- 0-39 observations: ACTUAL_ONLY, no forecast.
-- 40-79 observations: EXPLORATORY / LOW CONFIDENCE.
-- >=80 observations: PRODUCTION-eligible, subject to holdout-vs-naive governance.
+1. data/interbank.csv and data/interbank_history.csv contain ACTUAL observations only.
+2. The system never fabricates daily ACTUAL observations by interpolation.
+3. Vnstock Bronze may return sparse ON observations. With >=18 ACTUAL observations the model may publish an EXPLORATORY / LOW CONFIDENCE forecast.
+4. Production threshold is 60 ACTUAL observations.
+5. Every RUN_UPDATE_AND_PUSH.bat refresh appends and deduplicates ACTUAL history before rebuilding models.
+6. Streamlit Cloud only reads repository data/model outputs; it does not call Vnstock at runtime.

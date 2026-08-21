@@ -187,7 +187,7 @@ with tabs[2]:
         if len(ib_fc):
             st.plotly_chart(fan(ib, ib_fc, "overnight_rate", "Interbank ON — Actual & Forecast", "%/năm"), use_container_width=True)
             if ib_tier == "EXPLORATORY" or ib_status == "EXPLORATORY_LOW_CONFIDENCE":
-                st.warning("Forecast ON hiện chỉ ở mức EXPLORATORY / LOW CONFIDENCE vì lịch sử thực chưa đạt 80 quan sát. Không nên dùng như forecast production.")
+                st.warning("Forecast ON hiện chỉ ở mức EXPLORATORY / LOW CONFIDENCE vì lịch sử ACTUAL còn thưa/chưa đạt ngưỡng production 60 quan sát. Không nên dùng như forecast production.")
             else:
                 st.success("Interbank ON forecast đã đạt ngưỡng lịch sử production.")
         else:
@@ -195,8 +195,8 @@ with tabs[2]:
             fig.add_trace(go.Scatter(x=ib.tail(260)["date"], y=ib.tail(260)["overnight_rate"], mode="lines+markers", name="Actual ON"))
             fig.update_layout(title="Interbank ON — Actual", height=430, yaxis_title="%/năm", hovermode="x unified")
             st.plotly_chart(fig, use_container_width=True)
-            need_exp = max(0, 40-len(ib)); need_prod = max(0, 80-len(ib))
-            st.info(f"Có {len(ib)} quan sát ON thực. Cần thêm {need_exp} để mở forecast exploratory và {need_prod} để đạt ngưỡng production.")
+            need_exp = max(0, 18-len(ib)); need_prod = max(0, 60-len(ib))
+            st.info(f"Có {len(ib)} quan sát ON thực. Cần thêm {need_exp} để mở forecast exploratory và {need_prod} để đạt ngưỡng production. Không nội suy dữ liệu giả để tăng số quan sát.")
         st.caption(f"Lịch sử đang tích lũy từ {ib['date'].min().date()} đến {ib['date'].max().date()}; mỗi lần refresh sẽ append + deduplicate, không xóa lịch sử cũ.")
     else:
         st.warning("Chưa lấy được Interbank ON từ Vnstock. App không thay thế bằng lãi suất tiền gửi/cho vay.")
